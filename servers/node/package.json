@@ -1,0 +1,20 @@
+{
+  "name": "realtime-server",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "NODE_ENV=production node dist/index.js",
+    "dev": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@socket.io/redis-adapter": "8.3.0",
+    "ioredis": "5.8.2",
+    "socket.io": "4.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.9.2",
+    "typescript": "5.9.3"
+  }
+}

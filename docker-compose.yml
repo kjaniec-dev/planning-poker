@@ -1,0 +1,80 @@
+services:
+  # Next.js app with embedded Socket.IO (single-container mode)
+  app-embedded:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_REALTIME_URL: "" # same-origin socket when embedded
+    environment:
+      REALTIME_MODE: embedded
+      # REDIS_URL is optional; if set, embedded server will use redis adapter
+      REDIS_URL: ${REDIS_URL:-}
+    ports:
+      - "3000:3000"
+    profiles: [embedded]
+
+  # Next.js app without embedded Socket.IO (will use external realtime server)
+  app-external:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_REALTIME_URL: "http://localhost:3001"
+    environment:
+      HOSTNAME: "0.0.0.0"
+      REALTIME_MODE: external
+      REDIS_URL: ${REDIS_URL:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - realtime-server
+    profiles: [external]
+
+  # Separate Node.js realtime server (external mode only)
+  realtime-server:
+    build:
+      context: ./servers/${REALTIME_LANGUAGE:-node}
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3001
+      REDIS_URL: ${REDIS_URL:-}
+      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+    ports:
+      - "3001:3001"
+    profiles: [external]
+
+  app-external-go:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_REALTIME_URL: "http://localhost:3001"
+    environment:
+      HOSTNAME: "0.0.0.0"
+      REALTIME_MODE: external
+      REDIS_URL: ${REDIS_URL:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - realtime-server-go
+    profiles: [ external-go ]
+
+  # Go realtime server
+  realtime-server-go:
+    build:
+      context: ./servers/golang
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3001
+      REDIS_URL: ${REDIS_URL:-}
+    ports:
+      - "3001:3001"
+    profiles: [ external-go ]
+
+  # Optional Redis for scaling Socket.IO (only if you need to scale)
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    profiles: [redis]

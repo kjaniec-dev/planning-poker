@@ -1,263 +1,198 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { Ban } from "lucide-react";
+import { ConfirmDialog } from "@/app/components/confirm-dialog";
+import { Participants } from "@/app/components/participants";
+import { Results } from "@/app/components/results";
+import { StoryInfo } from "@/app/components/story-info";
+import { VotingCards } from "@/app/components/voting-cards";
 import { Button } from "@/components/ui/button";
 import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardHeader,
-    CardTitle,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
 } from "@/components/ui/card";
-import { StoryInfo } from "@/app/components/story-info";
-
-const CARDS = ["0.5", "1", "2", "3", "5", "8", "13", "20", "40", "?", "☕"];
-
-type Participant = {
-    id: string;
-    name: string;
-    vote?: string | null;
-};
+import { Input } from "@/components/ui/input";
+import { useRealtime } from "@/lib/realtime/useRealtime";
 
 export default function GameRoomPage() {
-    const params = useParams<{ room: string }>();
-    const search = useSearchParams();
+  const params = useParams<{ room: string }>();
+  const search = useSearchParams();
+  const router = useRouter();
 
-    const room = (params?.room || "").toString().toUpperCase();
-    const name = (search?.get("name") || "Guest").toString();
+  const room = (params?.room || "").toString().toUpperCase();
+  const name = (search?.get("name") || "Guest").toString();
+  const isSpectator = name === "Guest";
 
-    const [selection, setSelection] = useState<string | null>(null);
-    const [revealed, setRevealed] = useState(false);
-    const [participants, setParticipants] = useState<Participant[]>([
-        { id: "me", name, vote: null },
-        { id: "u2", name: "Alex", vote: null },
-        { id: "u3", name: "Sam", vote: null },
-        { id: "u4", name: "Taylor", vote: null },
-    ]);
+  const [selection, setSelection] = useState<string | null>(null);
+  const wasRevealed = useRef(false);
+  const [newName, setNewName] = useState("");
+  const {
+    participants,
+    revealed,
+    vote,
+    reveal,
+    reset,
+    story,
+    updateStory,
+    lastRound,
+    reestimate,
+    resumeVoting,
+    suspendVoting,
+  } = useRealtime(room, name);
 
-    const votedCount = participants.filter((p) => p.vote != null).length;
+  const me = participants.find((p) => p.name === name);
+  const isPaused = Boolean(me?.paused);
 
-    const results = useMemo(() => {
-        if (!revealed) return null;
-        const counts = new Map<string, number>();
-        for (const p of participants) {
-            const v = p.vote ?? "—";
-            counts.set(v, (counts.get(v) ?? 0) + 1);
-        }
-        const entries = Array.from(counts.entries()).sort((a, b) => {
-            const na = Number(a[0]), nb = Number(b[0]);
-            const aNum = !Number.isNaN(na), bNum = !Number.isNaN(nb);
-            if (aNum && bNum) return na - nb;
-            if (aNum) return -1;
-            if (bNum) return 1;
-            return a[0].localeCompare(b[0]);
-        });
-        const numericVotes = participants
-            .map((p) =>
-                p.vote && !Number.isNaN(Number(p.vote)) ? Number(p.vote) : null,
-            )
-            .filter((v): v is number => v !== null);
-        const avg =
-            numericVotes.length > 0
-                ? (numericVotes.reduce((a, b) => a + b, 0) / numericVotes.length).toFixed(2)
-                : null;
-        return { entries, avg };
-    }, [participants, revealed]);
+  useEffect(() => {
+    if (wasRevealed.current && !revealed) {
+      setSelection(null);
+    } else if (me && me.vote != selection && !me.paused) {
+      setSelection(me.vote);
+    }
+    wasRevealed.current = revealed;
+  }, [revealed]);
 
-    const handleReveal = () => {
-        if (!selection) return;
-        setParticipants((prev) =>
-            prev.map((p) => (p.id === "me" ? { ...p, vote: selection } : p)),
-        );
-        setRevealed(true);
-    };
+  const handleReveal = () => {
+    if (!selection) return;
+    reveal();
+  };
 
-    const handleReset = () => {
-        setSelection(null);
-        setRevealed(false);
-        setParticipants((prev) => prev.map((p) => ({ ...p, vote: null })));
-    };
+  const handleReset = () => reset();
 
-    const copyGameUrl = async () => {
-        const url =
-            typeof window !== "undefined"
-                ? `${location.origin}/game/${encodeURIComponent(room)}}`
-                : "";
-        if (!url) return;
-        try {
-            await navigator.clipboard.writeText(url);
-        } catch {
-            const ta = document.createElement("textarea");
-            ta.value = url;
-            document.body.appendChild(ta);
-            ta.select();
-            document.execCommand("copy");
-            document.body.removeChild(ta);
-        }
-    };
+  const handleBecomeParticipant = () => {
+    if (!newName) return;
+    const qp = new URLSearchParams(search);
+    qp.set("name", newName);
+    router.push(`/game/${encodeURIComponent(room)}?${qp.toString()}`);
+  };
 
-    return (
-        <div className="min-h-screen bg-background flex flex-col">
-            <main className="flex-1 px-6">
-                <div className="w-full max-w-7xl mx-auto py-6">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div className="lg:col-span-3">
-                            <StoryInfo onChange={() => {}} />
-                        </div>
-                    </div>
-                </div>
+  const copyGameUrl = async () => {
+    const url =
+      typeof window !== "undefined"
+        ? `${location.origin}/game/${encodeURIComponent(room)}`
+        : "";
+    if (!url) return;
 
-                <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2">
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-start justify-between gap-2">
-                                    <div>
-                                        <CardTitle>Planning Poker</CardTitle>
-                                        <CardDescription>
-                                            Room {room} • {name ? `Welcome, ${name}.` : ""}
-                                        </CardDescription>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Button
-                                            variant="outline"
-                                            onClick={copyGameUrl}
-                                            title="Copy room link"
-                                        >
-                                            Copy room link
-                                        </Button>
-                                        <Button
-                                            variant="ghost"
-                                            onClick={handleReset}
-                                            title="Reset game"
-                                            disabled={!revealed && !selection}
-                                        >
-                                            Reset game
-                                        </Button>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="grid grid-cols-5 gap-4">
-                                    {CARDS.map((c) => (
-                                        <Button
-                                            key={c}
-                                            variant={selection === c ? "default" : "outline"}
-                                            onClick={() => setSelection(c)}
-                                            className={`py-8 text-xl transition-all ${
-                                                revealed
-                                                    ? selection === c
-                                                        ? "ring-2 ring-primary"
-                                                        : "opacity-40"
-                                                    : ""
-                                            }`}
-                                        >
-                                            {c === "☕" ? (
-                                                <span className="text-3xl leading-none">☕</span>
-                                            ) : revealed ? (selection === c ? c : "—") : c}
-                                        </Button>
-                                    ))}
-                                </div>
+    try {
+      await navigator.clipboard.writeText(url);
+    } catch (error) {
+      console.error("Failed to copy:", error);
+    }
+  };
 
-                                <div className="mt-6 flex justify-end">
-                                    <Button
-                                        variant="outline"
-                                        onClick={handleReset}
-                                        disabled={!selection && !revealed}
-                                    >
-                                        Clear choice
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    <div className="lg:col-span-1 space-y-6">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Participants</CardTitle>
-                                <CardDescription>
-                                    {votedCount}/{participants.length} ready
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <ul className="space-y-3">
-                                    {participants.map((p) => (
-                                        <li
-                                            key={p.id}
-                                            className="flex items-center justify-between rounded-md border px-3 py-2"
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <div
-                                                    className={`size-2.5 rounded-full ${
-                                                        p.vote ? "bg-green-500" : "bg-zinc-500"
-                                                    }`}
-                                                />
-                                                <span className={p.id === "me" ? "font-medium" : ""}>
-                          {p.name} {p.id === "me" ? "(you)" : ""}
-                        </span>
-                                            </div>
-                                            <span className="text-sm text-muted-foreground">
-                        {revealed ? (p.vote ?? "—") : p.vote ? "voted" : "waiting"}
-                      </span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </CardContent>
-                        </Card>
-
-                        <Card>
-                            <CardHeader>
-                                <div className="flex items-center justify-between gap-2">
-                                    <div>
-                                        <CardTitle>Results</CardTitle>
-                                        <CardDescription>
-                                            {revealed ? "Votes distribution" : "Reveal to see results"}
-                                        </CardDescription>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Button size="sm" onClick={handleReveal} disabled={!selection || revealed}>
-                                            Reveal
-                                        </Button>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                {!revealed ? (
-                                    <div className="text-sm text-muted-foreground">No results yet.</div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        <ul className="space-y-2">
-                                            {results?.entries.map(([value, count]) => (
-                                                <li key={value} className="flex items-center justify-between">
-                                                    <span className="font-mono">{value}</span>
-                                                    <span className="text-muted-foreground">{count}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                        {results?.avg && (
-                                            <div className="text-sm">
-                                                Average (numbers only): <span className="font-semibold">{results.avg}</span>
-                                            </div>
-                                        )}
-                                        <div className="pt-2 border-t">
-                                            <ul className="mt-2 space-y-1">
-                                                {participants.map((p) => (
-                                                    <li key={p.id} className="flex justify-between text-sm">
-                                                        <span>{p.name}</span>
-                                                        <span className="font-mono">{p.vote ?? "—"}</span>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </div>
-                </div>
-            </main>
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      <main className="flex-1 px-6 pb-12">
+        <div className="w-full max-w-7xl mx-auto py-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-3">
+              <StoryInfo
+                value={story ?? undefined}
+                onChange={(s) => {
+                  if (s) {
+                    updateStory(s);
+                  }
+                }}
+              />
+            </div>
+          </div>
         </div>
-    );
+
+        <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <CardTitle>Planning Poker</CardTitle>
+                    <CardDescription>
+                      Room {room} • {name ? `Welcome, ${name}.` : ""}
+                    </CardDescription>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Button
+                      variant="default"
+                      onClick={copyGameUrl}
+                      title="Copy room link"
+                    >
+                      Copy room link
+                    </Button>
+                    <ConfirmDialog
+                      trigger={
+                        <Button size="sm" variant="ghost">
+                          Reset the game
+                        </Button>
+                      }
+                      title="Are you sure?"
+                      description="This will reset the game, clear all votes, and start a fresh round"
+                      actionLabel="Reset"
+                      onAction={handleReset}
+                    />
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent>
+                {isSpectator ? (
+                  <div className="flex h-40 flex-col items-center justify-center gap-4 text-center">
+                    <Ban className="size-12" />
+                    <div className="space-y-1">
+                      <p className="font-semibold">You are a spectator</p>
+                      <p className="text-sm text-muted-foreground">
+                        Enter your name to start voting.
+                      </p>
+                    </div>
+                    <form
+                      className="flex w-full max-w-sm items-center space-x-2"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleBecomeParticipant();
+                      }}
+                    >
+                      <Input
+                        placeholder="Your Name"
+                        value={newName}
+                        onChange={(e) => setNewName(e.target.value)}
+                      />
+                      <Button type="submit" disabled={!newName}>
+                        Join
+                      </Button>
+                    </form>
+                  </div>
+                ) : (
+                  <VotingCards
+                    selection={selection}
+                    revealed={revealed}
+                    onSelect={(s) => setSelection(s)}
+                    vote={vote}
+                    resumeVoting={resumeVoting}
+                    suspendVoting={suspendVoting}
+                    isPaused={isPaused}
+                  />
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="lg:col-span-1 space-y-6">
+            <Participants participants={participants} revealed={revealed} />
+
+            <Results
+              onReestimate={reestimate}
+              participants={participants}
+              revealed={revealed}
+              onReveal={handleReveal}
+              canReveal={!!selection}
+              previousRound={lastRound ?? undefined}
+            />
+          </div>
+        </div>
+      </main>
+    </div>
+  );
 }
