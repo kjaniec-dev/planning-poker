@@ -41,7 +41,7 @@ export function VotingCards({
 
     if (value === selection) {
       onSelect(null);
-      vote(""); // clear remote vote
+      vote("");
     } else {
       onSelect(value);
       vote(value);
@@ -74,7 +74,7 @@ export function VotingCards({
         )}
         {isPaused && (
           <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded sm:ml-2">
-            {`You are paused and won’t be counted from ${selection ? 'next' : 'this'} round.`}
+            {`You are paused and won’t be counted from ${selection ? "next" : "this"} round.`}
           </span>
         )}
       </div>
@@ -84,8 +84,10 @@ export function VotingCards({
             key={c}
             variant={selection === c ? "default" : "outline"}
             onClick={() => handleVote(c)}
+            disabled={revealed}
             className={`py-8 text-xl transition-all ${isPaused ? "cursor-not-allowed opacity-60" : ""} ${
-              revealed && (selection === c ? "ring-2 ring-primary" : "opacity-40")
+              revealed &&
+              (selection === c ? "ring-2 ring-primary" : "opacity-40")
             }
             `}
           >
@@ -111,7 +113,7 @@ export function VotingCards({
             size="sm"
             onClick={() => {
               onSelect(null);
-              vote(""); // clear remote vote
+              vote("");
             }}
             title="Clear your selection"
             disabled={!selection}

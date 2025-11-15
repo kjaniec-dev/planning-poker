@@ -2,18 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
-	socketio "github.com/googollee/go-socket.io"
-    "github.com/googollee/go-socket.io/engineio"
-    "github.com/googollee/go-socket.io/engineio/transport"
-    "github.com/googollee/go-socket.io/engineio/transport/polling"
-    "github.com/googollee/go-socket.io/engineio/transport/websocket"
+
+	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -25,8 +24,8 @@ type Participant struct {
 }
 
 type Story struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
+	Title string `json:"title"`
+	Link  string `json:"link"`
 }
 
 type LastRound struct {
@@ -43,16 +42,50 @@ type RoomState struct {
 	mu           sync.RWMutex
 }
 
+type WebSocketMessage struct {
+	Type string      `json:"type"`
+	Data interface{} `json:"data"`
+}
+
+type RedisMessage struct {
+	Type      string      `json:"type"`
+	RoomID    string      `json:"roomId"`
+	Data      interface{} `json:"data"`
+	ExcludeID string      `json:"excludeId,omitempty"`
+}
+
+type ExtendedWebSocket struct {
+	*websocket.Conn
+	ID      string
+	RoomID  string
+	IsAlive atomic.Bool
+}
+
 type Server struct {
-	io          *socketio.Server
 	rooms       map[string]*RoomState
 	roomsMu     sync.RWMutex
-	redisClient *redis.Client
+	redisPub    *redis.Client
+	redisSub    *redis.Client
+	clients     map[string]*ExtendedWebSocket
+	clientsMu   sync.RWMutex
+	upgrader    websocket.Upgrader
+	ctx         context.Context
+	cancel      context.CancelFunc
+	heartbeat   *time.Ticker
 }
 
 func NewServer() *Server {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Server{
-		rooms: make(map[string]*RoomState),
+		rooms:    make(map[string]*RoomState),
+		clients:  make(map[string]*ExtendedWebSocket),
+		ctx:      ctx,
+		cancel:   cancel,
+		upgrader: websocket.Upgrader{
+			CheckOrigin: func(r *http.Request) bool {
+				return true
+			},
+		},
 	}
 }
 
@@ -75,350 +108,448 @@ func (s *Server) getOrCreateRoom(roomID string) *RoomState {
 	return room
 }
 
-func (s *Server) Initialize() error {
-	allowOriginFunc := func(r *http.Request) bool {
-    		return true
-    	}
 
-    	server := socketio.NewServer(&engineio.Options{
-    		Transports: []transport.Transport{
-    			&polling.Transport{
-    				CheckOrigin: allowOriginFunc,
-    			},
-    			&websocket.Transport{
-    				CheckOrigin: allowOriginFunc,
-    			},
-    		},
-    	})
+func (s *Server) sendToClient(ws *ExtendedWebSocket, msgType string, data interface{}) {
+	message := WebSocketMessage{
+		Type: msgType,
+		Data: data,
+	}
 
-    	s.io = server
-
-    	redisURL := os.Getenv("REDIS_URL")
-    	if redisURL != "" {
-    		opt, err := redis.ParseURL(redisURL)
-    		if err != nil {
-    			log.Printf("Failed to parse Redis URL: %v", err)
-    		} else {
-    			s.redisClient = redis.NewClient(opt)
-    			ctx := context.Background()
-    			if err := s.redisClient.Ping(ctx).Err(); err != nil {
-    				log.Printf("Redis connection failed: %v", err)
-    			} else {
-    				log.Println("✓ Redis adapter connected")
-    			}
-    		}
-    	}
-
-    	server.OnConnect("/", func(conn socketio.Conn) error {
-    		log.Printf("✅ Client connected: %s", conn.ID())
-    		return nil
-    	})
-
-    	server.OnEvent("/", "join-room", func(conn socketio.Conn, data map[string]interface{}) {
-    		log.Printf("📥 join-room received from %s with data: %+v", conn.ID(), data)
-    		roomID, ok := data["roomId"].(string)
-    		if !ok {
-    			log.Printf("❌ Invalid roomId in join-room event")
-    			return
-    		}
-    		name, _ := data["name"].(string)
-    		log.Printf("📥 join-room: roomId=%s, name=%s, clientId=%s", roomID, name, conn.ID())
-
-    		conn.Join(roomID)
-    		room := s.getOrCreateRoom(roomID)
-
-    		room.mu.Lock()
-    		room.Participants[conn.ID()] = &Participant{
-    			ID:   conn.ID(),
-    			Name: name,
-    			Vote: nil,
-    		}
-    		participants := s.getParticipantsArray(room)
-    		revealed := room.Revealed
-    		story := room.Story
-    		lastRound := room.LastRound
-    		room.mu.Unlock()
-
-    		log.Printf("📊 Room state updated. Participants: %d, Revealed: %v", len(participants), revealed)
-    		log.Printf("📤 Broadcasting room-state to room %s", roomID)
-    		s.io.BroadcastToRoom("/", roomID, "room-state", map[string]interface{}{
-    			"participants": participants,
-    			"revealed":     revealed,
-    			"story":        story,
-    			"lastRound":    lastRound,
-    		})
-    	})
-
-    	server.OnError("/", func(conn socketio.Conn, err error) {
-    		log.Printf("❌ Socket.IO error from %s: %v", conn.ID(), err)
-    	})
-
-    	server.OnDisconnect("/", func(conn socketio.Conn, reason string) {
-    		log.Printf("❌ Client disconnected: %s (reason: %s)", conn.ID(), reason)
-
-    		s.roomsMu.RLock()
-    		roomsCopy := make(map[string]*RoomState)
-    		for k, v := range s.rooms {
-    			roomsCopy[k] = v
-    		}
-    		s.roomsMu.RUnlock()
-
-    		for roomID, room := range roomsCopy {
-    			room.mu.Lock()
-    			if _, exists := room.Participants[conn.ID()]; exists {
-    				delete(room.Participants, conn.ID())
-    				participants := s.getParticipantsArray(room)
-    				revealed := room.Revealed
-    				story := room.Story
-    				room.mu.Unlock()
-
-    				s.io.BroadcastToRoom("/", roomID, "room-state", map[string]interface{}{
-    					"participants": participants,
-    					"revealed":     revealed,
-    					"story":        story,
-    				})
-    			} else {
-    				room.mu.Unlock()
-    			}
-    		}
-    	})
-
-	server.OnEvent("/", "vote", func(conn socketio.Conn, data map[string]interface{}) {
-		roomID, _ := data["roomId"].(string)
-		vote, _ := data["vote"].(string)
-
-		s.roomsMu.RLock()
-		room, exists := s.rooms[roomID]
-		s.roomsMu.RUnlock()
-
-		if !exists {
-			return
+	if ws.Conn != nil && ws.Conn.UnderlyingConn() != nil {
+		if err := ws.WriteJSON(message); err != nil {
+			log.Printf("Error sending message to client %s: %v", ws.ID, err)
 		}
+	}
+}
 
-		room.mu.Lock()
-		if participant, ok := room.Participants[conn.ID()]; ok {
-			participant.Vote = &vote
-			s.io.BroadcastToRoom("/", roomID, "participant-voted", map[string]interface{}{
-				"id":      conn.ID(),
-				"hasVote": vote != "",
-			})
-		}
-		room.mu.Unlock()
-	})
+func (s *Server) broadcastToRoom(roomID string, msgType string, data interface{}, excludeID ...string) {
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
 
-	server.OnEvent("/", "reveal", func(conn socketio.Conn, data map[string]interface{}) {
-		roomID, _ := data["roomId"].(string)
+	if !exists {
+		return
+	}
 
-		s.roomsMu.RLock()
-		room, exists := s.rooms[roomID]
-		s.roomsMu.RUnlock()
+	room.mu.RLock()
+	defer room.mu.RUnlock()
 
-		if !exists {
-			return
-		}
+	message := WebSocketMessage{
+		Type: msgType,
+		Data: data,
+	}
 
-		room.mu.Lock()
-		room.Revealed = true
+	excludeMap := make(map[string]bool)
+	for _, id := range excludeID {
+		excludeMap[id] = true
+	}
 
-		roundID := time.Now().UnixMilli()
-		participants := s.getParticipantsArray(room)
-		room.LastRound = &LastRound{
-			ID:           string(rune(roundID)),
-			Participants: participants,
-		}
+	s.clientsMu.RLock()
+	defer s.clientsMu.RUnlock()
 
-		lastRound := room.LastRound
-		room.mu.Unlock()
-
-		s.io.BroadcastToRoom("/", roomID, "revealed", map[string]interface{}{
-			"participants": participants,
-			"lastRound":    lastRound,
-		})
-	})
-
-	server.OnEvent("/", "reestimate", func(conn socketio.Conn, data map[string]interface{}) {
-		roomID, _ := data["roomId"].(string)
-
-		s.roomsMu.RLock()
-		room, exists := s.rooms[roomID]
-		s.roomsMu.RUnlock()
-
-		if !exists {
-			return
-		}
-
-		room.mu.Lock()
-		room.Revealed = false
-		for _, p := range room.Participants {
-			p.Vote = nil
-		}
-		participants := s.getParticipantsArray(room)
-		story := room.Story
-		lastRound := room.LastRound
-		room.mu.Unlock()
-
-		s.io.BroadcastToRoom("/", roomID, "room-state", map[string]interface{}{
-			"participants": participants,
-			"revealed":     false,
-			"story":        story,
-			"lastRound":    lastRound,
-		})
-	})
-
-	server.OnEvent("/", "reset", func(conn socketio.Conn, data map[string]interface{}) {
-		roomID, _ := data["roomId"].(string)
-
-		s.roomsMu.RLock()
-		room, exists := s.rooms[roomID]
-		s.roomsMu.RUnlock()
-
-		if !exists {
-			return
-		}
-
-		room.mu.Lock()
-		room.Revealed = false
-		for _, p := range room.Participants {
-			p.Vote = nil
-		}
-		participants := s.getParticipantsArray(room)
-		story := room.Story
-		room.mu.Unlock()
-
-		s.io.BroadcastToRoom("/", roomID, "room-reset", map[string]interface{}{
-			"participants": participants,
-			"story":        story,
-		})
-	})
-
-	server.OnEvent("/", "update-story", func(conn socketio.Conn, data map[string]interface{}) {
-		roomID, _ := data["roomId"].(string)
-		storyData, _ := data["story"].(map[string]interface{})
-
-
-		s.roomsMu.RLock()
-		room, exists := s.rooms[roomID]
-		s.roomsMu.RUnlock()
-
-		if !exists {
-			return
-		}
-
-		room.mu.Lock()
-		if storyData != nil {
-			title, _ := storyData["title"].(string)
-			description, _ := storyData["description"].(string)
-			room.Story = &Story{
-				Title:       title,
-				Description: description,
-			}
-		} else {
-			room.Story = nil
-		}
-		story := room.Story
-		room.mu.Unlock()
-
-		log.Printf("📥 update-story received: roomId=%s, story=%+v", roomID, story)
-		s.io.BroadcastToRoom("/", roomID, "story-updated", map[string]interface{}{
-			"story": story,
-		})
-	})
-
-	server.OnEvent("/", "suspend-voting", func(conn socketio.Conn, data map[string]interface{}) {
-		roomID, _ := data["roomId"].(string)
-
-		s.roomsMu.RLock()
-		room, exists := s.rooms[roomID]
-		s.roomsMu.RUnlock()
-
-		if !exists {
-			return
-		}
-
-		room.mu.Lock()
-		if participant, ok := room.Participants[conn.ID()]; ok {
-			participant.Paused = true
-		}
-		participants := s.getParticipantsArray(room)
-		revealed := room.Revealed
-		story := room.Story
-		lastRound := room.LastRound
-		room.mu.Unlock()
-
-		s.io.BroadcastToRoom("/", roomID, "room-state", map[string]interface{}{
-			"participants": participants,
-			"revealed":     revealed,
-			"story":        story,
-			"lastRound":    lastRound,
-		})
-	})
-
-	server.OnEvent("/", "resume-voting", func(conn socketio.Conn, data map[string]interface{}) {
-		roomID, _ := data["roomId"].(string)
-
-		s.roomsMu.RLock()
-		room, exists := s.rooms[roomID]
-		s.roomsMu.RUnlock()
-
-		if !exists {
-			return
-		}
-
-		room.mu.Lock()
-		if participant, ok := room.Participants[conn.ID()]; ok {
-			participant.Paused = false
-			participant.Vote = nil
-		}
-		participants := s.getParticipantsArray(room)
-		revealed := room.Revealed
-		story := room.Story
-		lastRound := room.LastRound
-		room.mu.Unlock()
-
-		s.io.BroadcastToRoom("/", roomID, "room-state", map[string]interface{}{
-			"participants": participants,
-			"revealed":     revealed,
-			"story":        story,
-			"lastRound":    lastRound,
-		})
-	})
-
-	server.OnDisconnect("/", func(conn socketio.Conn, reason string) {
-		log.Printf("Client disconnected: %s (reason: %s)", conn.ID(), reason)
-
-		s.roomsMu.RLock()
-		roomsCopy := make(map[string]*RoomState)
-		for k, v := range s.rooms {
-			roomsCopy[k] = v
-		}
-		s.roomsMu.RUnlock()
-
-		for roomID, room := range roomsCopy {
-			room.mu.Lock()
-			if _, exists := room.Participants[conn.ID()]; exists {
-				delete(room.Participants, conn.ID())
-				participants := s.getParticipantsArray(room)
-				revealed := room.Revealed
-				story := room.Story
-				room.mu.Unlock()
-
-				s.io.BroadcastToRoom("/", roomID, "room-state", map[string]interface{}{
-					"participants": participants,
-					"revealed":     revealed,
-					"story":        story,
-				})
-			} else {
-				room.mu.Unlock()
+	for _, participant := range room.Participants {
+		if !excludeMap[participant.ID] {
+			if client, ok := s.clients[participant.ID]; ok {
+				if err := client.WriteJSON(message); err != nil {
+					log.Printf("Error broadcasting to client %s: %v", client.ID, err)
+				}
 			}
 		}
-	})
+	}
+}
 
-	server.OnError("/", func(conn socketio.Conn, err error) {
-		log.Printf("Socket error: %v", err)
-	})
+func (s *Server) setupRedisSubscription() {
+	if s.redisSub == nil {
+		return
+	}
 
-	log.Println("✓ Socket.IO server initialized")
-	return nil
+	pubsub := s.redisSub.Subscribe(s.ctx, "ws-broadcast")
+	ch := pubsub.Channel()
+
+	log.Println("✓ Subscribed to ws-broadcast channel")
+
+	go func() {
+		for {
+			select {
+			case msg := <-ch:
+				if msg == nil {
+					return
+				}
+				var redisMsg RedisMessage
+				if err := json.Unmarshal([]byte(msg.Payload), &redisMsg); err != nil {
+					log.Printf("Redis message parse error: %v", err)
+					continue
+				}
+				s.broadcastToRoom(redisMsg.RoomID, redisMsg.Type, redisMsg.Data, redisMsg.ExcludeID)
+			case <-s.ctx.Done():
+				pubsub.Close()
+				return
+			}
+		}
+	}()
+}
+
+func (s *Server) publishToRedis(roomID string, msgType string, data interface{}, excludeID string) {
+	if s.redisPub == nil {
+		return
+	}
+
+	redisMsg := RedisMessage{
+		Type:      msgType,
+		RoomID:    roomID,
+		Data:      data,
+		ExcludeID: excludeID,
+	}
+
+	payload, err := json.Marshal(redisMsg)
+	if err != nil {
+		log.Printf("Error marshaling Redis message: %v", err)
+		return
+	}
+
+	if err := s.redisPub.Publish(s.ctx, "ws-broadcast", string(payload)).Err(); err != nil {
+		log.Printf("Error publishing to Redis: %v", err)
+	}
+}
+
+func (s *Server) emitToRoom(roomID string, msgType string, data interface{}, excludeID string) {
+	s.broadcastToRoom(roomID, msgType, data, excludeID)
+
+	if s.redisPub != nil {
+		s.publishToRedis(roomID, msgType, data, excludeID)
+	}
+}
+
+func (s *Server) startHeartbeat() {
+	s.heartbeat = time.NewTicker(30 * time.Second)
+
+	go func() {
+		for {
+			select {
+			case <-s.heartbeat.C:
+				s.clientsMu.Lock()
+				for _, client := range s.clients {
+					if !client.IsAlive.Load() {
+						client.Close()
+					} else {
+						client.IsAlive.Store(false)
+						client.WriteMessage(websocket.PingMessage, []byte{})
+					}
+				}
+				s.clientsMu.Unlock()
+			case <-s.ctx.Done():
+				return
+			}
+		}
+	}()
+}
+
+func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface{}) {
+	roomID, ok := data["roomId"].(string)
+	if !ok {
+		log.Printf("❌ Invalid roomId in join-room event")
+		return
+	}
+	name, _ := data["name"].(string)
+	log.Printf("📥 join-room: roomId=%s, name=%s, clientId=%s", roomID, name, ws.ID)
+
+	ws.RoomID = roomID
+	room := s.getOrCreateRoom(roomID)
+
+	room.mu.Lock()
+	room.Participants[ws.ID] = &Participant{
+		ID:   ws.ID,
+		Name: name,
+		Vote: nil,
+	}
+	room.mu.Unlock()
+
+	s.broadcastRoomState(roomID)
+}
+
+func (s *Server) handleVote(ws *ExtendedWebSocket, data map[string]interface{}) {
+	roomID, _ := data["roomId"].(string)
+	vote, _ := data["vote"].(string)
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	// Lock the room to safely update the participant's vote
+	room.mu.Lock()
+	if participant, ok := room.Participants[ws.ID]; ok {
+		participant.Vote = &vote
+	}
+	room.mu.Unlock()
+
+	// Broadcast that a participant has voted, but don't send the full state yet
+	// This is more efficient for just showing the checkmark icon
+	s.broadcastToRoom(roomID, "participant-voted", map[string]interface{}{"id": ws.ID, "hasVote": vote != ""})
+}
+
+func (s *Server) handleReveal(ws *ExtendedWebSocket, data map[string]interface{}) {
+	roomID, _ := data["roomId"].(string)
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	room.mu.Lock()
+	room.Revealed = true
+
+	roundID := time.Now().UnixMilli()
+	participants := s.getParticipantsArray(room)
+	room.LastRound = &LastRound{
+		ID:           string(rune(roundID)),
+		Participants: participants,
+	}
+
+	lastRound := room.LastRound
+	room.mu.Unlock()
+
+	revealedData := map[string]interface{}{
+		"participants": participants,
+		"lastRound":    lastRound,
+	}
+	s.broadcastToRoom(roomID, "revealed", revealedData)
+}
+
+func (s *Server) handleReestimate(ws *ExtendedWebSocket, data map[string]interface{}) {
+	roomID, _ := data["roomId"].(string)
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	room.mu.Lock()
+	room.Revealed = false
+	for _, p := range room.Participants {
+		p.Vote = nil
+	}
+	room.mu.Unlock()
+	s.broadcastRoomState(roomID)
+}
+
+func (s *Server) handleReset(ws *ExtendedWebSocket, data map[string]interface{}) {
+	roomID, _ := data["roomId"].(string)
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	room.mu.Lock()
+	room.Revealed = false
+	for _, p := range room.Participants {
+		p.Vote = nil
+	}
+	participants := s.getParticipantsArray(room)
+	story := room.Story
+	room.mu.Unlock()
+
+	roomReset := map[string]interface{}{
+		"participants": participants,
+		"story":        story,
+	}
+	s.broadcastToRoom(roomID, "room-reset", roomReset)
+}
+
+func (s *Server) handleUpdateStory(ws *ExtendedWebSocket, data map[string]interface{}) {
+	roomID, _ := data["roomId"].(string)
+	storyData, _ := data["story"].(map[string]interface{})
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	room.mu.Lock()
+	if storyData != nil {
+		title, _ := storyData["title"].(string)
+		link, _ := storyData["link"].(string)
+		room.Story = &Story{
+			Title: title,
+			Link:  link,
+		}
+	} else {
+		room.Story = nil
+	}
+	story := room.Story
+	room.mu.Unlock()
+
+	log.Printf("📥 update-story received: roomId=%s, story=%+v", roomID, story)
+	storyUpdated := map[string]interface{}{
+		"story": story,
+	}
+	s.broadcastToRoom(roomID, "story-updated", storyUpdated)
+}
+
+func (s *Server) handleSuspendVoting(ws *ExtendedWebSocket, data map[string]interface{}) {
+	roomID, _ := data["roomId"].(string)
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	room.mu.Lock()
+	if participant, ok := room.Participants[ws.ID]; ok {
+		participant.Paused = true
+	}
+	room.mu.Unlock()
+	s.broadcastRoomState(roomID)
+}
+
+func (s *Server) handleResumeVoting(ws *ExtendedWebSocket, data map[string]interface{}) {
+	roomID, _ := data["roomId"].(string)
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	room.mu.Lock()
+	if participant, ok := room.Participants[ws.ID]; ok {
+		participant.Paused = false
+		participant.Vote = nil
+	}
+	room.mu.Unlock()
+	s.broadcastRoomState(roomID)
+}
+
+func (s *Server) handleClientDisconnect(ws *ExtendedWebSocket) {
+	log.Printf("❌ Client disconnected: %s", ws.ID)
+
+	s.clientsMu.Lock()
+	delete(s.clients, ws.ID)
+	s.clientsMu.Unlock()
+
+	// If the client had joined a room, remove them and notify others.
+	if ws.RoomID != "" {
+		s.roomsMu.RLock()
+		room, exists := s.rooms[ws.RoomID]
+		s.roomsMu.RUnlock()
+
+		if !exists {
+			return
+		}
+
+		room.mu.Lock()
+		delete(room.Participants, ws.ID)
+		room.mu.Unlock()
+
+		s.broadcastRoomState(ws.RoomID)
+	}
+}
+
+func (s *Server) handleUpdateName(ws *ExtendedWebSocket, data map[string]interface{}) {
+	roomID, _ := data["roomId"].(string)
+	name, _ := data["name"].(string)
+	log.Printf("📥 update-name: roomId=%s, newName=%s, clientId=%s", roomID, name, ws.ID)
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	room.mu.Lock()
+	if participant, ok := room.Participants[ws.ID]; ok {
+		participant.Name = name
+	}
+	room.mu.Unlock()
+
+	s.broadcastRoomState(roomID)
+}
+
+func (s *Server) handleMessage(ws *ExtendedWebSocket, message WebSocketMessage) {
+	switch message.Type {
+	case "join-room":
+		if data, ok := message.Data.(map[string]interface{}); ok {
+			s.handleJoinRoom(ws, data)
+		}
+	case "vote":
+		if data, ok := message.Data.(map[string]interface{}); ok {
+			s.handleVote(ws, data)
+		}
+	case "reveal":
+		if data, ok := message.Data.(map[string]interface{}); ok {
+			s.handleReveal(ws, data)
+		}
+	case "reestimate":
+		if data, ok := message.Data.(map[string]interface{}); ok {
+			s.handleReestimate(ws, data)
+		}
+	case "reset":
+		if data, ok := message.Data.(map[string]interface{}); ok {
+			s.handleReset(ws, data)
+		}
+	case "update-story":
+		if data, ok := message.Data.(map[string]interface{}); ok {
+			s.handleUpdateStory(ws, data)
+		}
+	case "update-name":
+		if data, ok := message.Data.(map[string]interface{}); ok {
+			s.handleUpdateName(ws, data)
+		}
+	case "suspend-voting":
+		if data, ok := message.Data.(map[string]interface{}); ok {
+			s.handleSuspendVoting(ws, data)
+		}
+	case "resume-voting":
+		if data, ok := message.Data.(map[string]interface{}); ok {
+			s.handleResumeVoting(ws, data)
+		}
+	default:
+		log.Printf("Unknown message type: %s", message.Type)
+	}
+}
+
+func (s *Server) broadcastRoomState(roomID string) {
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	room.mu.RLock()
+	defer room.mu.RUnlock()
+
+	roomState := map[string]interface{}{
+		"participants": s.getParticipantsArray(room),
+		"revealed":     room.Revealed,
+		"story":        room.Story,
+		"lastRound":    room.LastRound,
+	}
+	s.broadcastToRoom(roomID, "room-state", roomState)
 }
 
 func (s *Server) getParticipantsArray(room *RoomState) []Participant {
@@ -429,35 +560,138 @@ func (s *Server) getParticipantsArray(room *RoomState) []Participant {
 	return participants
 }
 
+func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := s.upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("Error upgrading to websocket: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	ws := &ExtendedWebSocket{
+		Conn: conn,
+		ID:   generateID(),
+	}
+	ws.IsAlive.Store(true)
+
+	s.clientsMu.Lock()
+	s.clients[ws.ID] = ws
+	s.clientsMu.Unlock()
+
+	log.Printf("✅ Client connected: %s", ws.ID)
+
+	// Setup pong handler for heartbeat
+	ws.SetPongHandler(func(string) error {
+		ws.IsAlive.Store(true)
+		return nil
+	})
+
+	for {
+		var message WebSocketMessage
+		err := conn.ReadJSON(&message)
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("WebSocket error: %v", err)
+			}
+			break
+		}
+
+		s.handleMessage(ws, message)
+	}
+
+	s.handleClientDisconnect(ws)
+}
+
+func (s *Server) Initialize() error {
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL != "" {
+		opt, err := redis.ParseURL(redisURL)
+		if err != nil {
+			log.Printf("Failed to parse Redis URL: %v", err)
+		} else {
+			s.redisPub = redis.NewClient(opt)
+			s.redisSub = redis.NewClient(opt)
+
+			// Test pub connection
+			if err := s.redisPub.Ping(s.ctx).Err(); err != nil {
+				log.Printf("Redis pub connection failed: %v", err)
+				s.redisPub.Close()
+				s.redisPub = nil
+			} else {
+				log.Println("✓ Redis pub connected")
+			}
+
+			// Test sub connection
+			if err := s.redisSub.Ping(s.ctx).Err(); err != nil {
+				log.Printf("Redis sub connection failed: %v", err)
+				s.redisSub.Close()
+				s.redisSub = nil
+			} else {
+				log.Println("✓ Redis sub connected")
+				s.setupRedisSubscription()
+			}
+
+			// Error handlers are handled by redis client by default
+		}
+	}
+
+	// Start heartbeat mechanism
+	s.startHeartbeat()
+
+	log.Println("✓ WebSocket server initialized")
+	return nil
+}
+
 func (s *Server) Shutdown(ctx context.Context) error {
 	log.Println("Starting graceful shutdown...")
 
-	if s.io != nil {
-		log.Println("Closing Socket.IO connections...")
-		if err := s.io.Close(); err != nil {
-			log.Printf("Error closing Socket.IO: %v", err)
+	// Cancel context to stop all goroutines
+	s.cancel()
+
+	// Stop heartbeat
+	if s.heartbeat != nil {
+		s.heartbeat.Stop()
+	}
+
+	// Close Redis pub client
+	if s.redisPub != nil {
+		log.Println("Closing Redis pub client...")
+		if err := s.redisPub.Close(); err != nil {
+			log.Printf("Error closing Redis pub: %v", err)
 		}
 	}
 
-	if s.redisClient != nil {
-		log.Println("Closing Redis client...")
-		if err := s.redisClient.Close(); err != nil {
-			log.Printf("Error closing Redis: %v", err)
+	// Close Redis sub client
+	if s.redisSub != nil {
+		log.Println("Closing Redis sub client...")
+		if err := s.redisSub.Close(); err != nil {
+			log.Printf("Error closing Redis sub: %v", err)
 		}
 	}
 
+	// Clear rooms
 	s.roomsMu.Lock()
 	s.rooms = make(map[string]*RoomState)
 	s.roomsMu.Unlock()
 
-	log.Println("✓ Socket.IO graceful shutdown complete")
+	// Close all clients
+	s.clientsMu.Lock()
+	for _, client := range s.clients {
+		if client.Conn != nil {
+			client.Close()
+		}
+	}
+	s.clients = make(map[string]*ExtendedWebSocket)
+	s.clientsMu.Unlock()
+
+	log.Println("✓ WebSocket graceful shutdown complete")
 	return nil
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
-		w.Header().Set("Access-control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
 
@@ -467,6 +701,10 @@ func corsMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func generateID() string {
+	return time.Now().Format("20060102150405.000000") + "-" + os.Getenv("HOSTNAME")
 }
 
 func main() {
@@ -481,9 +719,9 @@ func main() {
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("/api/socketio/", server.io)
+	mux.HandleFunc("/api/ws", server.handleWebSocket)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Socket.IO server running"))
+		w.Write([]byte("WebSocket server running"))
 	})
 
 	httpServer := &http.Server{

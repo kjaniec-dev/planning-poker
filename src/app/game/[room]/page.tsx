@@ -25,11 +25,11 @@ export default function GameRoomPage() {
   const router = useRouter();
 
   const room = (params?.room || "").toString().toUpperCase();
-  const name = (search?.get("name") || "Guest").toString();
-  const isSpectator = name === "Guest";
+  const initialName = search?.get("name")?.toString() || "Guest";
 
   const [selection, setSelection] = useState<string | null>(null);
   const wasRevealed = useRef(false);
+  const [currentName, setCurrentName] = useState(initialName.trim());
   const [newName, setNewName] = useState("");
   const {
     participants,
@@ -43,9 +43,11 @@ export default function GameRoomPage() {
     reestimate,
     resumeVoting,
     suspendVoting,
-  } = useRealtime(room, name);
+    updateName,
+  } = useRealtime(room, currentName);
 
-  const me = participants.find((p) => p.name === name);
+  const me = participants.find((p) => p.name === currentName);
+  const isSpectator = currentName === "Guest";
   const isPaused = Boolean(me?.paused);
 
   useEffect(() => {
@@ -66,9 +68,19 @@ export default function GameRoomPage() {
 
   const handleBecomeParticipant = () => {
     if (!newName) return;
-    const qp = new URLSearchParams(search);
-    qp.set("name", newName);
-    router.push(`/game/${encodeURIComponent(room)}?${qp.toString()}`);
+    const trimmedName = newName.trim();
+    updateName(trimmedName);
+    setCurrentName(trimmedName);
+
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set("name", trimmedName);
+    window.history.pushState(
+      { ...window.history.state, as: newUrl.href, url: newUrl.href },
+      "",
+      newUrl.href,
+    );
+
+    setNewName("");
   };
 
   const copyGameUrl = async () => {
@@ -111,7 +123,8 @@ export default function GameRoomPage() {
                   <div>
                     <CardTitle>Planning Poker</CardTitle>
                     <CardDescription>
-                      Room {room} • {name ? `Welcome, ${name}.` : ""}
+                      Room {room} •{" "}
+                      {currentName ? `Welcome, ${currentName}.` : ""}
                     </CardDescription>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -157,9 +170,10 @@ export default function GameRoomPage() {
                       <Input
                         placeholder="Your Name"
                         value={newName}
+                        autoFocus={true}
                         onChange={(e) => setNewName(e.target.value)}
                       />
-                      <Button type="submit" disabled={!newName}>
+                      <Button type="submit" disabled={!newName.trim()}>
                         Join
                       </Button>
                     </form>

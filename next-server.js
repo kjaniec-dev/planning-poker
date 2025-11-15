@@ -1,6 +1,9 @@
 const { createServer } = require("http");
 const next = require("next");
-const { initSocketIO, shutdown: shutdownRealtime } = require("./servers/node/dist/index.js");
+const {
+  initWebSocketServer,
+  shutdown: shutdownRealtime,
+} = require("./servers/node/dist/index.js");
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME || "0.0.0.0";
@@ -13,68 +16,70 @@ let httpServer;
 let isShuttingDown = false;
 
 app.prepare().then(() => {
-    httpServer = createServer(async (req, res) => {
-        try {
-            await handle(req, res);
-        } catch (err) {
-            console.error("Error handling request:", err);
-            res.statusCode = 500;
-            res.end("Internal Server Error");
-        }
-    });
-
-    if (process.env.REALTIME_MODE === "embedded") {
-        console.log("✓ Initializing embedded Socket.IO server");
-        initSocketIO(httpServer);
+  httpServer = createServer(async (req, res) => {
+    try {
+      await handle(req, res);
+    } catch (err) {
+      console.error("Error handling request:", err);
+      res.statusCode = 500;
+      res.end("Internal Server Error");
     }
+  });
 
-    httpServer.once("error", (err) => {
-        console.error("Server error:", err);
-        process.exit(1);
-    });
+  if (process.env.REALTIME_MODE === "embedded") {
+    console.log("✓ Initializing embedded WebSocket server");
+    initWebSocketServer(httpServer);
+  }
 
-    httpServer.listen(port, () => {
-        console.log(`✓ Ready on http://${hostname}:${port}`);
-    });
+  httpServer.once("error", (err) => {
+    console.error("Server error:", err);
+    process.exit(1);
+  });
 
-    async function gracefulShutdown(signal) {
-        if (isShuttingDown) return;
-        isShuttingDown = true;
+  httpServer.listen(port, hostname, () => {
+    console.log(`✓ Ready on http://${hostname}:${port}`);
+  });
 
-        console.log(`\n✓ Received ${signal}, starting graceful shutdown...`);
+  async function gracefulShutdown(signal) {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
 
-        try {
-            httpServer.close(() => {
-                console.log("✓ HTTP server closed");
-            });
+    console.log(`\n✓ Received ${signal}, starting graceful shutdown...`);
 
-            const activeConnections = new Set();
-            httpServer.on("connection", (conn) => {
-                activeConnections.add(conn);
-                conn.on("close", () => {
-                    activeConnections.delete(conn);
-                });
-            });
+    try {
+      httpServer.close(() => {
+        console.log("✓ HTTP server closed");
+      });
 
-            const connectionTimeout = setTimeout(() => {
-                console.log(`⚠ Forcing close of ${activeConnections.size} remaining connections`);
-                activeConnections.forEach((conn) => conn.destroy());
-            }, 30000);
+      const activeConnections = new Set();
+      httpServer.on("connection", (conn) => {
+        activeConnections.add(conn);
+        conn.on("close", () => {
+          activeConnections.delete(conn);
+        });
+      });
 
-            if (process.env.REALTIME_MODE === "embedded") {
-                console.log("✓ Shutting down embedded Socket.IO server");
-                await shutdownRealtime();
-            }
+      const connectionTimeout = setTimeout(() => {
+        console.log(
+          `⚠ Forcing close of ${activeConnections.size} remaining connections`,
+        );
+        activeConnections.forEach((conn) => conn.destroy());
+      }, 30000);
 
-            clearTimeout(connectionTimeout);
-            console.log("✓ Graceful shutdown complete");
-            process.exit(0);
-        } catch (err) {
-            console.error("Error during shutdown:", err);
-            process.exit(1);
-        }
+      if (process.env.REALTIME_MODE === "embedded") {
+        console.log("✓ Shutting down embedded WebSocket server");
+        await shutdownRealtime();
+      }
+
+      clearTimeout(connectionTimeout);
+      console.log("✓ Graceful shutdown complete");
+      process.exit(0);
+    } catch (err) {
+      console.error("Error during shutdown:", err);
+      process.exit(1);
     }
+  }
 
-    process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
-    process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+  process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+  process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 });

@@ -1,137 +1,140 @@
-import { useEffect, useRef, useState } from "react";
-import { io, type Socket } from "socket.io-client";
+import { useEffect, useState } from "react";
+import {
+    joinRoom,
+    sendMessage,
+    subscribeToMessages,
+} from "./wsClient";
 
 type Participant = {
-  id: string;
-  name: string;
-  vote: string | null;
-  paused?: boolean;
+    id: string;
+    name: string;
+    vote: string | null;
+    paused?: boolean;
 };
 
 type Story = { title: string; link: string } | null;
 
+type WSMessage = {
+    type: string;
+    data: any;
+};
+
 export function useRealtime(roomId: string, userName: string) {
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [revealed, setRevealed] = useState(false);
-  const [story, setStory] = useState<Story>(null);
-  const [lastRound, setLastRound] = useState<null | {
-    id: string;
-    participants: any[];
-  }>(null);
-  const socketRef = useRef<Socket | null>(null);
+    const [participants, setParticipants] = useState<Participant[]>([]);
+    const [revealed, setRevealed] = useState(false);
+    const [story, setStory] = useState<Story>(null);
+    const [lastRound, setLastRound] = useState<null | {
+        id: string;
+        participants: any[];
+    }>(null);
+    const [isConnected, setIsConnected] = useState(false);
 
-  useEffect(() => {
-      console.log("🔍 useRealtime effect triggered with:", { roomId, userName });
+    useEffect(() => {
+        if (!roomId || !userName) {
+            console.error("❌ Missing roomId or userName:", { roomId, userName });
+            return;
+        }
 
-      // Check if parameters are valid
-      if (!roomId || !userName) {
-          console.error("❌ Missing roomId or userName:", { roomId, userName });
-          return;
-      }
+        joinRoom(roomId, userName);
 
-    const socketUrl = process.env.NEXT_PUBLIC_REALTIME_URL || "";
-      const socket = io(socketUrl, {
-          path: "/api/socketio",
-          reconnection: true,
-          reconnectionDelay: 1000,
-          reconnectionDelayMax: 5000,
-          reconnectionAttempts: 5,
-      });
-    socketRef.current = socket;
+        const unsubscribe = subscribeToMessages((message: WSMessage) => {
+            const { type, data } = message;
 
-    socket.on("connect", () => {
-        console.log("✅ Socket connected with ID:", socket.id);
-        console.log("📤 About to emit join-room:", { roomId, name: userName });
-      socket.emit("join-room", { roomId, name: userName });
-    });
+            switch (type) {
+                case "room-state":
+                    setIsConnected(true);
+                    setParticipants(data.participants);
+                    setRevealed(data.revealed);
+                    setStory(data.story ?? null);
+                    setLastRound(data.lastRound ?? null);
+                    break;
 
-      socket.on("connect_error", (error) => {
-          console.error("❌ Connection error:", error);
-      });
+                case "participant-voted":
+                    setParticipants((prev) =>
+                        prev.map((p) =>
+                            p.id === data.id
+                                ? { ...p, vote: data.hasVote ? "hidden" : null }
+                                : p,
+                        ),
+                    );
+                    break;
 
-      socket.on("connect_failed", (reason) => {
-          console.error("❌ Connection failed:", reason);
-      });
+                case "revealed":
+                    setParticipants(data.participants);
+                    setRevealed(true);
+                    setLastRound(data.lastRound ?? null);
+                    break;
 
-    socket.on(
-      "room-state",
-      ({ participants: p, revealed: r, story: s, lastRound: lr }) => {
-        setParticipants(p);
-        setRevealed(r);
-        setStory(s ?? null);
-        setLastRound(lr ?? null);
-      },
-    );
+                case "room-reset":
+                    setParticipants(data.participants);
+                    setRevealed(false);
+                    setStory(null);
+                    setLastRound(null);
+                    break;
 
-    socket.on("participant-voted", ({ id, hasVote }) => {
-      setParticipants((prev) =>
-        prev.map((p) =>
-          p.id === id ? { ...p, vote: hasVote ? "hidden" : null } : p,
-        ),
-      );
-    });
+                case "story-updated":
+                    setStory(data.story ?? null);
+                    break;
 
-    socket.on("revealed", ({ participants: p, lastRound: lr }) => {
-      setParticipants(p);
-      setRevealed(true);
-      setLastRound(lr ?? null);
-    });
+                default:
+                    console.warn("⚠️ Unknown message type:", type);
+            }
+        });
 
-    socket.on("room-reset", ({ participants: p, story: s }) => {
-      setParticipants(p);
-      setRevealed(false);
-      setStory(null);
-      setLastRound(null);
-    });
+        return () => {
+            unsubscribe();
+        };
+    }, [roomId, userName]);
 
-    socket.on("story-updated", ({ story: s }) => {
-      setStory(s ?? null);
-    });
-
-    return () => {
-      socket.disconnect();
+    const send = (type: string, data: any) => {
+        sendMessage(type, data);
     };
-  }, [roomId, userName]);
 
-  const vote = (value: string) => {
-    socketRef.current?.emit("vote", { roomId, vote: value });
-  };
+    const vote = (value: string) => {
+        send("vote", { roomId, vote: value });
+    };
 
-  const reveal = () => {
-    socketRef.current?.emit("reveal", { roomId });
-  };
+    const reveal = () => {
+        send("reveal", { roomId });
+    };
 
-  const reestimate = () => {
-    socketRef.current?.emit("reestimate", { roomId });
-  };
+    const reestimate = () => {
+        send("reestimate", { roomId });
+    };
 
-  const reset = () => {
-    socketRef.current?.emit("reset", { roomId });
-  };
+    const reset = () => {
+        send("reset", { roomId });
+    };
 
-  const updateStory = (s: Story) => {
-    socketRef.current?.emit("update-story", { roomId, story: s });
-  };
+    const updateStory = (s: Story) => {
+        send("update-story", { roomId, story: s });
+    };
 
-  const suspendVoting = () => {
-    socketRef.current?.emit("suspend-voting", { roomId });
-  };
+    const suspendVoting = () => {
+        send("suspend-voting", { roomId });
+    };
 
-  const resumeVoting = () => {
-    socketRef.current?.emit("resume-voting", { roomId });
-  };
+    const resumeVoting = () => {
+        send("resume-voting", { roomId });
+    };
 
-  return {
-    participants,
-    reestimate,
-    revealed,
-    story,
-    vote,
-    reveal,
-    lastRound,
-    reset,
-    updateStory,
-    suspendVoting,
-    resumeVoting,
-  };
+    const updateName = (newName: string) => {
+        send("update-name", { roomId, name: newName });
+    };
+
+    return {
+        participants,
+        reestimate,
+        revealed,
+        story,
+        vote,
+        reveal,
+        lastRound,
+        reset,
+        updateStory,
+        suspendVoting,
+        resumeVoting,
+        isConnected,
+        updateName,
+    };
 }

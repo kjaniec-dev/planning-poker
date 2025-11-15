@@ -204,6 +204,7 @@ dist
 # Serverless directories
 .serverless/
 
+
 # FuseBox cache
 .fusebox/
 
@@ -223,3 +224,5 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
+# AI
+.claude/

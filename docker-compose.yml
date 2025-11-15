@@ -1,11 +1,11 @@
 services:
-  # Next.js app with embedded Socket.IO (single-container mode)
-  app-embedded:
+
+  app-with-embedded-server:
     build:
       context: .
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_REALTIME_URL: "" # same-origin socket when embedded
+        NEXT_PUBLIC_REALTIME_URL: ""
     environment:
       REALTIME_MODE: embedded
       # REDIS_URL is optional; if set, embedded server will use redis adapter
@@ -14,7 +14,6 @@ services:
       - "3000:3000"
     profiles: [embedded]
 
-  # Next.js app without embedded Socket.IO (will use external realtime server)
   app-external:
     build:
       context: .
@@ -28,11 +27,10 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - realtime-server
+      - node-websocket-server
     profiles: [external]
 
-  # Separate Node.js realtime server (external mode only)
-  realtime-server:
+  node-websocket-server:
     build:
       context: ./servers/${REALTIME_LANGUAGE:-node}
       dockerfile: Dockerfile
@@ -60,7 +58,6 @@ services:
       - realtime-server-go
     profiles: [ external-go ]
 
-  # Go realtime server
   realtime-server-go:
     build:
       context: ./servers/golang
@@ -72,7 +69,7 @@ services:
       - "3001:3001"
     profiles: [ external-go ]
 
-  # Optional Redis for scaling Socket.IO (only if you need to scale)
+  # Optional Redis for scaling for websockets (only if you need to scale)
   redis:
     image: redis:8-alpine
     ports:

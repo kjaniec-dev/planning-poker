@@ -43,3 +43,8 @@ next-env.d.ts
 # IDE
 .vscode/
 .idea/
+
+# AI
+.claude
+.serena
+.mcp.json

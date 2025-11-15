@@ -30,7 +30,7 @@ export default function LandingPage() {
     Array.from({ length })
       .map(() =>
         "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".charAt(
-          Math.floor(Math.random() * 64),
+          Math.floor(Math.random() * 36),
         ),
       )
       .join("");
@@ -82,61 +82,78 @@ export default function LandingPage() {
                 </TabsList>
 
                 <TabsContent value="create" className="space-y-4 mt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name-create">Your Name</Label>
-                    <Input
-                      id="name-create"
-                      placeholder="Enter your name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                    />
-                  </div>
-                  <Button
-                    className="w-full"
-                    onClick={() => handleSubmit(true)}
-                    disabled={!name}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      handleSubmit(true);
+                    }}
                   >
-                    Create Room
-                  </Button>
+                    <div className="space-y-2">
+                      <Label htmlFor="name-create">Your Name</Label>
+                      <Input
+                        id="name-create"
+                        placeholder="Enter your name"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                      />
+                    </div>
+                    <Button
+                      className="w-full mt-2"
+                      type="submit"
+                      disabled={!name}
+                    >
+                      Create Room
+                    </Button>
+                  </form>
                   <p className="text-sm text-muted-foreground text-center">
                     Create a new room and share the code with your team
                   </p>
                 </TabsContent>
 
-                <TabsContent value="join" className="space-y-4 mt-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name-join">Your Name</Label>
-                    <Input
-                      id="name-join"
-                      placeholder="Enter your name"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="room-code">Room Code</Label>
-                    <Input
-                      id="room-code"
-                      placeholder="Enter room code"
-                      value={roomCode}
-                      onChange={(e) =>
-                        setRoomCode(e.target.value.toUpperCase())
-                      }
-                      className="font-mono text-center tracking-widest uppercase"
-                      maxLength={6}
-                    />
-                  </div>
-                  <Button
-                    className="w-full"
-                    onClick={() => handleSubmit(false)}
-                    disabled={!name || !roomCode}
-                  >
-                    Join Room
-                  </Button>
-                  <p className="text-sm text-muted-foreground text-center">
-                    Enter the code provided by your team lead
-                  </p>
-                </TabsContent>
+                  <TabsContent value="join" className="space-y-4 mt-4">
+                      <form
+                          onSubmit={(e) => {
+                              e.preventDefault();
+                              handleSubmit(false);
+                          }}
+                      >
+                          <div className="space-y-2">
+                              <Label htmlFor="name-join">Your Name</Label>
+                              <Input
+                                  id="name-join"
+                                  placeholder="Enter your name"
+                                  value={name}
+                                  onChange={(e) => setName(e.target.value)}
+                              />
+                          </div>
+                          <div className="space-y-2 mt-2">
+                              <Label htmlFor="room-code">Room Code</Label>
+                              <Input
+                                  id="room-code"
+                                  placeholder="Enter room code"
+                                  value={roomCode}
+                                  onChange={(e) =>
+                                      setRoomCode(e.target.value.toUpperCase())
+                                  }
+                                  className="uppercase"
+                                  maxLength={8}
+                              />
+                              <p className="text-xs text-muted-foreground">
+                                  8‑character code, e.g. <span className="font-mono">AB12CD34</span>
+                              </p>
+                          </div>
+                          <Button
+                              className="w-full mt-2"
+                              type="submit"
+                              disabled={!name || !roomCode}
+                          >
+                              Join Room
+                          </Button>
+                      </form>
+                      <p className="text-sm text-muted-foreground text-center">
+                          Enter the code provided by your team lead
+                      </p>
+                  </TabsContent>
               </Tabs>
             </CardContent>
           </Card>
