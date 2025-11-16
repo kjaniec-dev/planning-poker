@@ -20,28 +20,29 @@ COPY src ./src
 RUN npm run build
 
 
-# Stage 3: Production runner using distroless
-FROM gcr.io/distroless/nodejs22-debian12:nonroot
+# Stage 3: Production runner using Chainguard secure base image
+# Chainguard images are distroless-equivalent with latest Node.js versions
+FROM cgr.dev/chainguard/node:latest
 
 WORKDIR /app
 
 # Copy production dependencies
-COPY --from=deps --chown=nonroot:nonroot /app/node_modules ./node_modules
+COPY --from=deps --chown=node:node /app/node_modules ./node_modules
 
 # Copy compiled JavaScript
-COPY --from=builder --chown=nonroot:nonroot /app/dist ./dist
+COPY --from=builder --chown=node:node /app/dist ./dist
 
 # Copy package.json for module resolution
-COPY --chown=nonroot:nonroot package.json ./
+COPY --chown=node:node package.json ./
 
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=3001
 
-# Run as non-root user (already set in distroless image)
-USER nonroot
+# Run as non-root user (Chainguard default is 'node' user)
+USER node
 
 EXPOSE 3001
 
-# Use node directly (distroless doesn't have npm)
+# Use node directly (no shell in Chainguard images)
 CMD ["dist/index.js"]
