@@ -26,33 +26,37 @@ COPY . .
 RUN npm run build
 
 
-# Stage 3: Production runner using distroless
-FROM gcr.io/distroless/nodejs22-debian12:nonroot
+# Stage 3: Production runner using Chainguard secure base image
+# Chainguard images are distroless-equivalent with latest Node.js versions
+FROM cgr.dev/chainguard/node:latest-dev AS runner-base
+
+# Stage 4: Final minimal runtime
+FROM cgr.dev/chainguard/node:latest
 
 WORKDIR /app
 
 # Copy standalone build (includes all necessary dependencies)
-COPY --from=builder --chown=nonroot:nonroot /app/.next/standalone ./
-COPY --from=builder --chown=nonroot:nonroot /app/.next/static ./.next/static
-COPY --from=builder --chown=nonroot:nonroot /app/public ./public
+COPY --from=builder --chown=node:node /app/.next/standalone ./
+COPY --from=builder --chown=node:node /app/.next/static ./.next/static
+COPY --from=builder --chown=node:node /app/public ./public
 
 # Copy Node WebSocket server (for embedded mode)
-COPY --from=builder --chown=nonroot:nonroot /app/servers/node/dist ./servers/node/dist
-COPY --from=deps --chown=nonroot:nonroot /app/servers/node/node_modules ./servers/node/node_modules
-COPY --chown=nonroot:nonroot servers/node/package.json ./servers/node/
+COPY --from=builder --chown=node:node /app/servers/node/dist ./servers/node/dist
+COPY --from=deps --chown=node:node /app/servers/node/node_modules ./servers/node/node_modules
+COPY --chown=node:node servers/node/package.json ./servers/node/
 
 # Copy custom server for WebSocket integration
-COPY --chown=nonroot:nonroot next-server.js ./
+COPY --chown=node:node next-server.js ./
 
 # Set environment variables
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Run as non-root user (already set in distroless image)
-USER nonroot
+# Run as non-root user (Chainguard default is 'node' user)
+USER node
 
 EXPOSE 3000
 
-# Use node directly (distroless doesn't have npm)
+# Use node directly (no shell in distroless/Chainguard images)
 CMD ["next-server.js"]
