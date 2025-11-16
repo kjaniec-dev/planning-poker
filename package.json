@@ -7,16 +7,23 @@
   ],
   "scripts": {
     "dev:ws": "npm run dev -w planning-poker-websocket-server",
+    "dev:ws:go": "cd servers/golang && go run main.go",
     "dev:next": "next dev",
     "dev:external": "concurrently \"npm run dev:ws\" \"npm run dev:next\"",
+    "dev:external:go": "concurrently \"npm run dev:ws:go\" \"npm run dev:next\"",
     "dev:embedded": "NEXT_PUBLIC_REALTIME_URL= REALTIME_MODE=embedded NODE_ENV=production npm run build && REALTIME_MODE=embedded NODE_ENV=production node next-server.js",
     "build": "npm run build -w planning-poker-websocket-server && next build",
     "build:ws": "npm run build -w planning-poker-websocket-server",
+    "build:ws:go": "cd servers/golang && go build -o websocket-server main.go",
     "start": "NODE_ENV=production node next-server.js",
     "start:ws": "npm run start -w planning-poker-websocket-server",
+<<<<<<< HEAD
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+=======
+    "start:ws:go": "cd servers/golang && ./websocket-server",
+>>>>>>> 16cda3f (feat: add Go WebSocket server integration scripts)
     "lint": "biome check",
     "lint:fix": "biome check --write",
     "format": "biome format --write",
