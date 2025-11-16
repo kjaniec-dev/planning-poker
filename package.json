@@ -2,13 +2,18 @@
   "name": "planning-poker",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "servers/node"
+  ],
   "scripts": {
-    "dev:ws": "npm --prefix servers/node run dev",
+    "dev:ws": "npm run dev -w planning-poker-websocket-server",
     "dev:next": "next dev",
     "dev:external": "concurrently \"npm run dev:ws\" \"npm run dev:next\"",
     "dev:embedded": "NEXT_PUBLIC_REALTIME_URL= REALTIME_MODE=embedded NODE_ENV=production npm run build && REALTIME_MODE=embedded NODE_ENV=production node next-server.js",
-    "build": "npm --prefix servers/node run build && next build",
+    "build": "npm run build -w planning-poker-websocket-server && next build",
+    "build:ws": "npm run build -w planning-poker-websocket-server",
     "start": "NODE_ENV=production node next-server.js",
+    "start:ws": "npm run start -w planning-poker-websocket-server",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
