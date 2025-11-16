@@ -13,6 +13,16 @@ services:
     ports:
       - "3000:3000"
     profiles: [embedded]
+    # Security: Read-only filesystem where possible
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Security: Drop all capabilities
+    cap_drop:
+      - ALL
+    # Security: No new privileges
+    security_opt:
+      - no-new-privileges:true
 
   app-external:
     build:
@@ -29,6 +39,13 @@ services:
     depends_on:
       - node-websocket-server
     profiles: [external]
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
   node-websocket-server:
     build:
@@ -37,10 +54,17 @@ services:
     environment:
       PORT: 3001
       REDIS_URL: ${REDIS_URL:-}
-      NEXT_PUBLIC_APP_URL: "http://localhost:3000"
+      ALLOWED_ORIGINS: "http://localhost:3000,https://localhost:3000"
     ports:
       - "3001:3001"
     profiles: [external]
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
   app-external-go:
     build:
@@ -57,6 +81,13 @@ services:
     depends_on:
       - realtime-server-go
     profiles: [ external-go ]
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
   realtime-server-go:
     build:
@@ -65,9 +96,15 @@ services:
     environment:
       PORT: 3001
       REDIS_URL: ${REDIS_URL:-}
+      ALLOWED_ORIGINS: "http://localhost:3000,https://localhost:3000"
     ports:
       - "3001:3001"
     profiles: [ external-go ]
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
 
   # Optional Redis for scaling for websockets (only if you need to scale)
   redis:
@@ -75,3 +112,12 @@ services:
     ports:
       - "6379:6379"
     profiles: [redis]
+    # Security hardening for Redis
+    command: redis-server --protected-mode yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    read_only: true
+    tmpfs:
+      - /data
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true

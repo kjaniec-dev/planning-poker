@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -76,17 +77,34 @@ type Server struct {
 
 func NewServer() *Server {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Server{
-		rooms:    make(map[string]*RoomState),
-		clients:  make(map[string]*ExtendedWebSocket),
-		ctx:      ctx,
-		cancel:   cancel,
-		upgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool {
-				return true
-			},
+	s := &Server{
+		rooms:   make(map[string]*RoomState),
+		clients: make(map[string]*ExtendedWebSocket),
+		ctx:     ctx,
+		cancel:  cancel,
+	}
+
+	// Configure WebSocket upgrader with origin validation
+	s.upgrader = websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return true // Allow connections without Origin header (e.g., native clients)
+			}
+
+			allowedOrigins := getAllowedOrigins()
+			for _, allowed := range allowedOrigins {
+				if origin == allowed {
+					return true
+				}
+			}
+
+			log.Printf("Rejected WebSocket connection from origin: %s", origin)
+			return false
 		},
 	}
+
+	return s
 }
 
 func (s *Server) getOrCreateRoom(roomID string) *RoomState {
@@ -688,14 +706,61 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	return nil
 }
 
+func getAllowedOrigins() []string {
+	originsEnv := os.Getenv("ALLOWED_ORIGINS")
+	if originsEnv == "" {
+		// Default to localhost for development
+		return []string{"http://localhost:3000", "https://localhost:3000"}
+	}
+
+	var origins []string
+	for _, origin := range splitAndTrim(originsEnv, ",") {
+		if origin != "" {
+			origins = append(origins, origin)
+		}
+	}
+	return origins
+}
+
+func splitAndTrim(s string, sep string) []string {
+	parts := make([]string, 0)
+	for _, part := range strings.Split(s, sep) {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			parts = append(parts, trimmed)
+		}
+	}
+	return parts
+}
+
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
+		origin := r.Header.Get("Origin")
+		allowedOrigins := getAllowedOrigins()
+
+		// Check if the origin is allowed
+		originAllowed := false
+		for _, allowed := range allowedOrigins {
+			if origin == allowed {
+				originAllowed = true
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				break
+			}
+		}
+
+		if !originAllowed && origin != "" {
+			log.Printf("CORS: Rejected request from origin: %s", origin)
+			http.Error(w, "CORS origin not allowed", http.StatusForbidden)
+			return
+		}
+
 		w.Header().Set("Access-Control-Allow-Credentials", "true")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+		w.Header().Set("Access-Control-Max-Age", "86400") // Cache preflight for 24 hours
 
 		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 
