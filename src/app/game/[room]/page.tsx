@@ -1,8 +1,8 @@
 "use client";
 
+import { Ban } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Ban } from "lucide-react";
 import { ConfirmDialog } from "@/app/components/confirm-dialog";
 import { Participants } from "@/app/components/participants";
 import { Results } from "@/app/components/results";

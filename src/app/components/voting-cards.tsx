@@ -1,6 +1,6 @@
+import { Pause, Play } from "lucide-react";
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Pause, Play } from "lucide-react";
 
 const CARDS = [
   "0",

@@ -1,7 +1,7 @@
 import type { Server as HTTPServer } from "http";
-import { WebSocketServer, WebSocket } from "ws";
 import { createServer } from "http";
 import Redis from "ioredis";
+import { WebSocket, WebSocketServer } from "ws";
 
 let wss: WebSocketServer | null = null;
 let redisPub: Redis | null = null;
@@ -186,7 +186,14 @@ export function initWebSocketServer(httpServer: HTTPServer) {
     });
 
     ws.on("close", (code, reason) => {
-      console.log("🔌 Client disconnected:", extWs.id, "code:", code, "reason:", reason);
+      console.log(
+        "🔌 Client disconnected:",
+        extWs.id,
+        "code:",
+        code,
+        "reason:",
+        reason,
+      );
       handleDisconnect(extWs);
     });
 
@@ -240,7 +247,12 @@ function handleJoinRoom(
   data: { roomId: string; name: string },
 ) {
   const { roomId, name } = data;
-  console.log("📥 join-room: roomId=%s, name=%s, clientId=%s", roomId, name, ws.id);
+  console.log(
+    "📥 join-room: roomId=%s, name=%s, clientId=%s",
+    roomId,
+    name,
+    ws.id,
+  );
   ws.roomId = roomId;
 
   const room = getOrCreateRoom(roomId);
@@ -478,12 +490,12 @@ if (require.main === module) {
     res.end("WebSocket server is running");
   });
 
-  httpServer.on('error', (err: any) => {
-    if (err.code === 'EADDRINUSE') {
+  httpServer.on("error", (err: any) => {
+    if (err.code === "EADDRINUSE") {
       console.error(`❌ Port ${port} is already in use. Exiting...`);
       process.exit(1);
     } else {
-      console.error('❌ Server error:', err);
+      console.error("❌ Server error:", err);
       process.exit(1);
     }
   });

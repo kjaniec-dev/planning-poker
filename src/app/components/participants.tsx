@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Check, Loader, Pause } from "lucide-react";
+import { Ban, Check, Loader } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -18,10 +18,9 @@ type Participant = {
 
 type Props = {
   participants: Participant[];
-  revealed: boolean;
 };
 
-export function Participants({ participants, revealed }: Props) {
+export function Participants({ participants }: Props) {
   const votingParticipants = participants.filter(
     (p) => p.name !== "Guest" && !p.paused,
   );

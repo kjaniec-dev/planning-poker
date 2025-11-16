@@ -1,4 +1,4 @@
-const { createServer } = require("http");
+const { createServer } = require("node:http");
 const next = require("next");
 const {
   initWebSocketServer,
