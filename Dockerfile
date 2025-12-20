@@ -28,7 +28,7 @@ RUN npm run build
 
 # Stage 3: Production runner using Docker Hardened Images (DHI)
 # DHI images are pre-hardened with security best practices built-in
-FROM docker.io/hardened-images/node:24-alpine
+FROM dhi.io/node:24-alpine3.22
 
 WORKDIR /app
 
