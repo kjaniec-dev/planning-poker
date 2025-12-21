@@ -139,10 +139,18 @@ describe("useRealtime", () => {
       const socket = mockServer.clients()[0];
       const messages: any[] = [];
 
+      // Start collecting messages
       socket.on("message", (data) => {
         messages.push(JSON.parse(data.toString()));
       });
 
+      // Wait for join-room message to be sent first
+      await waitFor(() => {
+        const joinMessage = messages.find((m) => m.type === "join-room");
+        expect(joinMessage).toBeDefined();
+      });
+
+      // Now send vote
       act(() => {
         result.current.vote("5");
       });
@@ -164,10 +172,18 @@ describe("useRealtime", () => {
       const socket = mockServer.clients()[0];
       const messages: any[] = [];
 
+      // Start collecting messages
       socket.on("message", (data) => {
         messages.push(JSON.parse(data.toString()));
       });
 
+      // Wait for join-room message to be sent first
+      await waitFor(() => {
+        const joinMessage = messages.find((m) => m.type === "join-room");
+        expect(joinMessage).toBeDefined();
+      });
+
+      // Now send reveal
       act(() => {
         result.current.reveal();
       });
