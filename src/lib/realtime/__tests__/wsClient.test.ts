@@ -147,6 +147,69 @@ describe("wsClient", () => {
 
       connectIfNeeded();
     });
+
+    it("should support multiple listeners", (done) => {
+      const { connectIfNeeded, subscribeToMessages } = getWsClient();
+
+      let listener1Called = false;
+      let listener2Called = false;
+
+      const listener1 = () => {
+        listener1Called = true;
+        checkBothCalled();
+      };
+
+      const listener2 = () => {
+        listener2Called = true;
+        checkBothCalled();
+      };
+
+      function checkBothCalled() {
+        if (listener1Called && listener2Called) {
+          done();
+        }
+      }
+
+      subscribeToMessages(listener1);
+      subscribeToMessages(listener2);
+
+      mockServer.on("connection", (socket) => {
+        socket.send(JSON.stringify({ type: "test", data: {} }));
+      });
+
+      connectIfNeeded();
+    });
+
+    it("should unsubscribe listeners", (done) => {
+      const { connectIfNeeded, subscribeToMessages } = getWsClient();
+      let callCount = 0;
+
+      const listener = () => {
+        callCount++;
+      };
+
+      const unsubscribe = subscribeToMessages(listener);
+
+      mockServer.on("connection", (socket) => {
+        // Send first message
+        socket.send(JSON.stringify({ type: "msg1", data: {} }));
+
+        setTimeout(() => {
+          // Unsubscribe
+          unsubscribe();
+
+          // Send second message (should not be received)
+          socket.send(JSON.stringify({ type: "msg2", data: {} }));
+
+          setTimeout(() => {
+            expect(callCount).toBe(1);
+            done();
+          }, 100);
+        }, 100);
+      });
+
+      connectIfNeeded();
+    });
   });
 
   describe("error handling", () => {
