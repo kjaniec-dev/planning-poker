@@ -194,7 +194,7 @@ export default function GameRoomPage() {
           </div>
 
           <div className="lg:col-span-1 space-y-6">
-            <Participants participants={participants} revealed={revealed} />
+            <Participants participants={participants} />
 
             <Results
               onReestimate={reestimate}
