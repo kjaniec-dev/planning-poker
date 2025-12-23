@@ -20,30 +20,30 @@ COPY src ./src
 RUN npm run build
 
 
-# Stage 3: Production runner using Docker Hardened Images (DHI)
-# DHI images are pre-hardened with security best practices built-in
-FROM dhi.io/node:24-alpine3.22
+# Stage 3: Production runner using Google Distroless
+# Distroless images provide minimal attack surface with no shell or package manager
+FROM gcr.io/distroless/nodejs24-debian12:nonroot
 
 WORKDIR /app
 
 # Copy production dependencies
-COPY --from=deps --chown=node:node /app/node_modules ./node_modules
+COPY --from=deps --chown=nonroot:nonroot /app/node_modules ./node_modules
 
 # Copy compiled JavaScript
-COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --from=builder --chown=nonroot:nonroot /app/dist ./dist
 
 # Copy package.json for module resolution
-COPY --chown=node:node package.json ./
+COPY --chown=nonroot:nonroot package.json ./
 
 # Set environment variables
 ENV NODE_ENV=production \
     PORT=3001 \
     NODE_OPTIONS="--max-old-space-size=1024"
 
-# DHI images already run as non-root user 'node'
-USER node
+# Distroless images run as non-root user by default
+USER nonroot
 
 EXPOSE 3001
 
-# DHI images include dumb-init by default
-CMD ["node", "dist/index.js"]
+# No shell available in distroless - direct node execution
+CMD ["dist/index.js"]

@@ -26,24 +26,24 @@ COPY . .
 RUN npm run build
 
 
-# Stage 3: Production runner using Docker Hardened Images (DHI)
-# DHI images are pre-hardened with security best practices built-in
-FROM dhi.io/node:24-alpine3.22
+# Stage 3: Production runner using Google Distroless
+# Distroless images provide minimal attack surface with no shell or package manager
+FROM gcr.io/distroless/nodejs24-debian12:nonroot
 
 WORKDIR /app
 
 # Copy standalone build (includes all necessary dependencies)
-COPY --from=builder --chown=node:node /app/.next/standalone ./
-COPY --from=builder --chown=node:node /app/.next/static ./.next/static
-COPY --from=builder --chown=node:node /app/public ./public
+COPY --from=builder --chown=nonroot:nonroot /app/.next/standalone ./
+COPY --from=builder --chown=nonroot:nonroot /app/.next/static ./.next/static
+COPY --from=builder --chown=nonroot:nonroot /app/public ./public
 
 # Copy Node WebSocket server (for embedded mode)
-COPY --from=builder --chown=node:node /app/servers/node/dist ./servers/node/dist
-COPY --from=deps --chown=node:node /app/servers/node/node_modules ./servers/node/node_modules
-COPY --chown=node:node servers/node/package.json ./servers/node/
+COPY --from=builder --chown=nonroot:nonroot /app/servers/node/dist ./servers/node/dist
+COPY --from=deps --chown=nonroot:nonroot /app/servers/node/node_modules ./servers/node/node_modules
+COPY --chown=nonroot:nonroot servers/node/package.json ./servers/node/
 
 # Copy custom server for WebSocket integration
-COPY --chown=node:node next-server.js ./
+COPY --chown=nonroot:nonroot next-server.js ./
 
 # Set environment variables
 ENV NODE_ENV=production \
@@ -51,10 +51,10 @@ ENV NODE_ENV=production \
     HOSTNAME="0.0.0.0" \
     NODE_OPTIONS="--max-old-space-size=2048"
 
-# DHI images already run as non-root user 'node'
-USER node
+# Distroless images run as non-root user by default
+USER nonroot
 
 EXPOSE 3000
 
-# DHI images include dumb-init by default
-CMD ["node", "next-server.js"]
+# No shell available in distroless - direct node execution
+CMD ["next-server.js"]
