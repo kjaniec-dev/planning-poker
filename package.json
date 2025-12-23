@@ -17,13 +17,10 @@
     "build:ws:go": "cd servers/golang && go build -o websocket-server main.go",
     "start": "NODE_ENV=production node next-server.js",
     "start:ws": "npm run start -w planning-poker-websocket-server",
-<<<<<<< HEAD
+    "start:ws:go": "cd servers/golang && ./websocket-server",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-=======
-    "start:ws:go": "cd servers/golang && ./websocket-server",
->>>>>>> 16cda3f (feat: add Go WebSocket server integration scripts)
     "lint": "biome check",
     "lint:fix": "biome check --write",
     "format": "biome format --write",
