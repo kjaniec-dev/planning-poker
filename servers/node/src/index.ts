@@ -292,7 +292,35 @@ function handleJoinRoom(
   ws.roomId = roomId;
 
   const room = getOrCreateRoom(roomId);
-  room.participants.set(ws.id, { id: ws.id, name, vote: null });
+
+  // Check if a participant with the same name exists (from previous connection)
+  let existingParticipant: { id: string; name: string; vote: string | null; paused?: boolean } | null = null;
+  let oldId: string | null = null;
+
+  for (const [id, participant] of room.participants.entries()) {
+    if (participant.name === name) {
+      existingParticipant = participant;
+      oldId = id;
+      break;
+    }
+  }
+
+  // If participant with same name exists, restore their data with new client ID
+  if (existingParticipant && oldId) {
+    console.log("🔄 Restoring participant data for %s (old ID: %s, new ID: %s)", name, oldId, ws.id);
+    // Remove old entry
+    room.participants.delete(oldId);
+    // Add with new ID but preserve vote and paused state
+    room.participants.set(ws.id, {
+      id: ws.id,
+      name,
+      vote: existingParticipant.vote,
+      paused: existingParticipant.paused
+    });
+  } else {
+    // New participant
+    room.participants.set(ws.id, { id: ws.id, name, vote: null });
+  }
 
   const roomState = {
     participants: Array.from(room.participants.values()),
@@ -433,14 +461,15 @@ function handleDisconnect(ws: ExtendedWebSocket) {
   console.log("Client disconnected:", ws.id);
   clients.delete(ws.id);
 
+  // Note: We intentionally DO NOT remove participants from rooms on disconnect
+  // This allows their votes to persist when they reconnect (e.g., after page refresh)
+  // Participants are only removed when the game is explicitly reset
+  // However, we still notify other clients that someone disconnected
   rooms.forEach((room, roomId) => {
     if (room.participants.has(ws.id)) {
-      room.participants.delete(ws.id);
-      emitToRoom(roomId, "room-state", {
-        participants: Array.from(room.participants.values()),
-        revealed: room.revealed,
-        story: room.story ?? null,
-      });
+      console.log("🔄 Keeping participant data for potential reconnection:", ws.id);
+      // Don't delete, just notify others
+      // The participant will be updated with new ID when they rejoin with same name
     }
   });
 }

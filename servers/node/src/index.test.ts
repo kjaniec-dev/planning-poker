@@ -403,7 +403,7 @@ describe("WebSocket Server", () => {
       });
     });
 
-    test("should remove participant on disconnect", async () => {
+    test("should keep participant data on disconnect", async () => {
       const ws1 = await createWSConnection();
       const ws2 = await createWSConnection();
       const roomId = "test-room";
@@ -425,11 +425,92 @@ describe("WebSocket Server", () => {
       // Wait for disconnect handler
       await new Promise((resolve) => setTimeout(resolve, 200));
 
-      // Verify Alice was removed from room
+      // Verify Alice is still in the room (data persisted for reconnection)
+      room = getOrCreateRoom(roomId);
+      expect(room.participants.size).toBe(2);
+      const aliceStillThere = Array.from(room.participants.values()).find(p => p.name === "Alice");
+      expect(aliceStillThere).toBeDefined();
+
+      ws2.close();
+    });
+
+    test("should restore vote when participant reconnects with same name", async () => {
+      const roomId = "test-room";
+
+      // First connection
+      const ws1 = await createWSConnection();
+      sendMessage(ws1, "join-room", { roomId, name: "Alice" });
+      await waitForMessage(ws1); // room-state
+
+      // Vote
+      sendMessage(ws1, "vote", { roomId, vote: "5" });
+      await waitForMessage(ws1); // participant-voted
+
+      // Verify vote is stored
+      let room = getOrCreateRoom(roomId);
+      let alice = Array.from(room.participants.values()).find(p => p.name === "Alice");
+      expect(alice?.vote).toBe("5");
+
+      // Disconnect
+      ws1.close();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Verify Alice data is still in room (persisted)
       room = getOrCreateRoom(roomId);
       expect(room.participants.size).toBe(1);
-      const remainingParticipant = Array.from(room.participants.values())[0];
-      expect(remainingParticipant.name).toBe("Bob");
+      alice = Array.from(room.participants.values()).find(p => p.name === "Alice");
+      expect(alice?.vote).toBe("5");
+
+      // Reconnect with same name
+      const ws2 = await createWSConnection();
+      sendMessage(ws2, "join-room", { roomId, name: "Alice" });
+      const rejoinMessage = await waitForMessage(ws2);
+
+      // Verify vote was restored
+      expect(rejoinMessage.data.participants).toHaveLength(1);
+      expect(rejoinMessage.data.participants[0].name).toBe("Alice");
+      expect(rejoinMessage.data.participants[0].vote).toBe("5");
+
+      // Also verify in room state
+      room = getOrCreateRoom(roomId);
+      alice = Array.from(room.participants.values()).find(p => p.name === "Alice");
+      expect(alice?.vote).toBe("5");
+
+      ws2.close();
+    });
+
+    test("should restore vote and paused state when reconnecting", async () => {
+      const roomId = "test-room";
+
+      // First connection
+      const ws1 = await createWSConnection();
+      sendMessage(ws1, "join-room", { roomId, name: "Bob" });
+      await waitForMessage(ws1);
+
+      // Vote and pause
+      sendMessage(ws1, "vote", { roomId, vote: "8" });
+      await waitForMessage(ws1); // participant-voted
+
+      sendMessage(ws1, "suspend-voting", { roomId });
+      await waitForMessage(ws1); // room-state
+
+      // Verify state
+      let room = getOrCreateRoom(roomId);
+      let bob = Array.from(room.participants.values()).find(p => p.name === "Bob");
+      expect(bob?.vote).toBe("8");
+      expect(bob?.paused).toBe(true);
+
+      // Disconnect and reconnect
+      ws1.close();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      const ws2 = await createWSConnection();
+      sendMessage(ws2, "join-room", { roomId, name: "Bob" });
+      const rejoinMessage = await waitForMessage(ws2);
+
+      // Verify both vote and paused state were restored
+      expect(rejoinMessage.data.participants[0].vote).toBe("8");
+      expect(rejoinMessage.data.participants[0].paused).toBe(true);
 
       ws2.close();
     });
