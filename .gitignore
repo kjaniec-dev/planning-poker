@@ -44,7 +44,6 @@ next-env.d.ts
 .vscode/
 .idea/
 
-# AI
-.claude
+# AI (personal configs)
 .serena
 .mcp.json
