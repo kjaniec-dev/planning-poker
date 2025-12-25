@@ -1,4 +1,4 @@
-import type { Server as HTTPServer } from "http";
+import type { Server as HTTPServer, IncomingMessage } from "http";
 import { createServer } from "http";
 import Redis from "ioredis";
 import { WebSocket, WebSocketServer } from "ws";
@@ -6,6 +6,41 @@ import { WebSocket, WebSocketServer } from "ws";
 let wss: WebSocketServer | null = null;
 let redisPub: Redis | null = null;
 let redisSub: Redis | null = null;
+
+function getAllowedOrigins(): string[] {
+  const originsEnv = process.env.ALLOWED_ORIGINS;
+  if (!originsEnv) {
+    // Default to localhost for development
+    return ["http://localhost:3000", "https://localhost:3000"];
+  }
+
+  return originsEnv
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter((origin) => origin.length > 0);
+}
+
+function verifyClient(info: {
+  origin: string;
+  req: IncomingMessage;
+  secure: boolean;
+}): boolean {
+  const { origin } = info;
+
+  // Allow connections without Origin header (e.g., native clients)
+  if (!origin) {
+    return true;
+  }
+
+  const allowedOrigins = getAllowedOrigins();
+  const isAllowed = allowedOrigins.includes(origin);
+
+  if (!isAllowed) {
+    console.log(`Rejected WebSocket connection from origin: ${origin}`);
+  }
+
+  return isAllowed;
+}
 
 export type RoomState = {
   id: string;
@@ -132,6 +167,7 @@ export function initWebSocketServer(httpServer: HTTPServer) {
     server: httpServer,
     path: "/api/ws",
     perMessageDeflate: false,
+    verifyClient, // Add origin validation
   });
 
   if (process.env.REDIS_URL) {
