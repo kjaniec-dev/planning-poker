@@ -4,6 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production-embedded
       args:
         NEXT_PUBLIC_REALTIME_URL: ""
     environment:
@@ -28,6 +29,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production-standalone
       args:
         NEXT_PUBLIC_REALTIME_URL: "http://localhost:3001"
     environment:
@@ -70,6 +72,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      target: production-standalone
       args:
         NEXT_PUBLIC_REALTIME_URL: "http://localhost:3001"
     environment:
