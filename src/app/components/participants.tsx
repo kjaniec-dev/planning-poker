@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Check, Loader } from "lucide-react";
+import { Ban, Check, Loader, Pause } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -54,13 +54,17 @@ export function Participants({ participants }: Props) {
                 title={
                   p.name === "Guest"
                     ? "Spectator"
-                    : p.vote
-                      ? "Voted"
-                      : "Voting..."
+                    : p.paused
+                      ? "Paused"
+                      : p.vote
+                        ? "Voted"
+                        : "Voting..."
                 }
               >
                 {p.name === "Guest" ? (
                   <Ban className="h-4 w-4" />
+                ) : p.paused ? (
+                  <Pause className="h-4 w-4" />
                 ) : p.vote ? (
                   <Check className="h-4 w-4" />
                 ) : (

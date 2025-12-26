@@ -326,6 +326,13 @@ func (s *Server) handleVote(ws *ExtendedWebSocket, data map[string]interface{}) 
 	// Lock the room to safely update the participant's vote
 	room.mu.Lock()
 	if participant, ok := room.Participants[ws.ID]; ok {
+		// Prevent clearing vote if paused and cards are already revealed
+		// This guards against race conditions where pause action triggers vote clearing
+		if vote == "" && participant.Paused && room.Revealed && participant.Vote != nil && *participant.Vote != "" {
+			log.Printf("⚠️ Prevented vote clearing for paused participant after reveal: %s", ws.ID)
+			room.mu.Unlock()
+			return
+		}
 		participant.Vote = &vote
 	}
 	room.mu.Unlock()
@@ -479,7 +486,7 @@ func (s *Server) handleResumeVoting(ws *ExtendedWebSocket, data map[string]inter
 	room.mu.Lock()
 	if participant, ok := room.Participants[ws.ID]; ok {
 		participant.Paused = false
-		participant.Vote = nil
+		// Don't clear the vote when resuming - preserve it
 	}
 	room.mu.Unlock()
 	s.broadcastRoomState(roomID)

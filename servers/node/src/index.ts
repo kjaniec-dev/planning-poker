@@ -1,5 +1,5 @@
-import type { Server as HTTPServer, IncomingMessage } from "http";
-import { createServer } from "http";
+import type { Server as HTTPServer, IncomingMessage } from "node:http";
+import { createServer } from "node:http";
 import Redis from "ioredis";
 import { WebSocket, WebSocketServer } from "ws";
 
@@ -64,7 +64,7 @@ type ExtendedWebSocket = WebSocket & {
 
 type WSMessage = {
   type: string;
-  data: any;
+  data: unknown;
 };
 
 const rooms = new Map<string, RoomState>();
@@ -80,14 +80,18 @@ export function getOrCreateRoom(roomId: string): RoomState {
       lastRound: null,
     });
   }
-  return rooms.get(roomId)!;
+  const room = rooms.get(roomId);
+  if (!room) {
+    throw new Error(`Room ${roomId} not found after creation`);
+  }
+  return room;
 }
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 15);
 }
 
-function sendToClient(ws: ExtendedWebSocket, type: string, data: any) {
+function sendToClient(ws: ExtendedWebSocket, type: string, data: unknown) {
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type, data }));
   }
@@ -96,7 +100,7 @@ function sendToClient(ws: ExtendedWebSocket, type: string, data: any) {
 function broadcastToRoom(
   roomId: string,
   type: string,
-  data: any,
+  data: unknown,
   excludeId?: string,
 ) {
   const room = rooms.get(roomId);
@@ -115,7 +119,7 @@ function broadcastToRoom(
 function setupRedisSubscription() {
   if (!redisSub) return;
 
-  redisSub.on("message", (channel: string, message: string) => {
+  redisSub.on("message", (_channel: string, message: string) => {
     try {
       const { type, roomId, data, excludeId } = JSON.parse(message);
       broadcastToRoom(roomId, type, data, excludeId);
@@ -136,7 +140,7 @@ function setupRedisSubscription() {
 async function publishToRedis(
   roomId: string,
   type: string,
-  data: any,
+  data: unknown,
   excludeId?: string,
 ) {
   if (redisPub) {
@@ -150,7 +154,7 @@ async function publishToRedis(
 function emitToRoom(
   roomId: string,
   type: string,
-  data: any,
+  data: unknown,
   excludeId?: string,
 ) {
   broadcastToRoom(roomId, type, data, excludeId);
@@ -185,14 +189,15 @@ export function initWebSocketServer(httpServer: HTTPServer) {
   }
 
   const interval = setInterval(() => {
-    wss?.clients.forEach((ws) => {
+    for (const ws of wss?.clients || []) {
       const extWs = ws as ExtendedWebSocket;
       if (!extWs.isAlive) {
-        return ws.terminate();
+        ws.terminate();
+        continue;
       }
       extWs.isAlive = false;
       ws.ping();
-    });
+    }
   }, 30000);
 
   wss.on("close", () => {
@@ -247,31 +252,31 @@ function handleMessage(ws: ExtendedWebSocket, message: WSMessage) {
 
   switch (type) {
     case "join-room":
-      handleJoinRoom(ws, data);
+      handleJoinRoom(ws, data as { roomId: string; name: string });
       break;
     case "vote":
-      handleVote(ws, data);
+      handleVote(ws, data as { roomId: string; vote: string });
       break;
     case "reveal":
-      handleReveal(ws, data);
+      handleReveal(ws, data as { roomId: string });
       break;
     case "reestimate":
-      handleReestimate(ws, data);
+      handleReestimate(ws, data as { roomId: string });
       break;
     case "reset":
-      handleReset(ws, data);
+      handleReset(ws, data as { roomId: string });
       break;
     case "update-story":
-      handleUpdateStory(ws, data);
+      handleUpdateStory(ws, data as { roomId: string; story: unknown });
       break;
     case "suspend-voting":
-      handleSuspendVoting(ws, data);
+      handleSuspendVoting(ws, data as { roomId: string });
       break;
     case "resume-voting":
-      handleResumeVoting(ws, data);
+      handleResumeVoting(ws, data as { roomId: string });
       break;
     case "update-name":
-      handleUpdateName(ws, data);
+      handleUpdateName(ws, data as { roomId: string; name: string });
       break;
     default:
       console.warn("Unknown message type:", type);
@@ -294,7 +299,12 @@ function handleJoinRoom(
   const room = getOrCreateRoom(roomId);
 
   // Check if a participant with the same name exists (from previous connection)
-  let existingParticipant: { id: string; name: string; vote: string | null; paused?: boolean } | null = null;
+  let existingParticipant: {
+    id: string;
+    name: string;
+    vote: string | null;
+    paused?: boolean;
+  } | null = null;
   let oldId: string | null = null;
 
   for (const [id, participant] of room.participants.entries()) {
@@ -307,7 +317,12 @@ function handleJoinRoom(
 
   // If participant with same name exists, restore their data with new client ID
   if (existingParticipant && oldId) {
-    console.log("🔄 Restoring participant data for %s (old ID: %s, new ID: %s)", name, oldId, ws.id);
+    console.log(
+      "🔄 Restoring participant data for %s (old ID: %s, new ID: %s)",
+      name,
+      oldId,
+      ws.id,
+    );
     // Remove old entry
     room.participants.delete(oldId);
     // Add with new ID but preserve vote and paused state
@@ -315,7 +330,7 @@ function handleJoinRoom(
       id: ws.id,
       name,
       vote: existingParticipant.vote,
-      paused: existingParticipant.paused
+      paused: existingParticipant.paused,
     });
   } else {
     // New participant
@@ -351,12 +366,22 @@ function handleVote(
 
   const participant = room.participants.get(ws.id);
   if (participant) {
+    // Prevent clearing vote if paused and cards are already revealed
+    // This guards against race conditions where pause action triggers vote clearing
+    if (!vote && participant.paused && room.revealed && participant.vote) {
+      console.warn(
+        "⚠️ Prevented vote clearing for paused participant after reveal:",
+        ws.id,
+      );
+      return;
+    }
+
     participant.vote = vote;
     emitToRoom(roomId, "participant-voted", { id: ws.id, hasVote: !!vote });
   }
 }
 
-function handleReveal(ws: ExtendedWebSocket, data: { roomId: string }) {
+function handleReveal(_ws: ExtendedWebSocket, data: { roomId: string }) {
   const { roomId } = data;
   const room = rooms.get(roomId);
   if (!room) return;
@@ -375,15 +400,15 @@ function handleReveal(ws: ExtendedWebSocket, data: { roomId: string }) {
   });
 }
 
-function handleReestimate(ws: ExtendedWebSocket, data: { roomId: string }) {
+function handleReestimate(_ws: ExtendedWebSocket, data: { roomId: string }) {
   const { roomId } = data;
   const room = rooms.get(roomId);
   if (!room) return;
 
   room.revealed = false;
-  room.participants.forEach((p) => {
+  for (const p of room.participants.values()) {
     p.vote = null;
-  });
+  }
 
   emitToRoom(roomId, "room-state", {
     participants: Array.from(room.participants.values()),
@@ -393,13 +418,15 @@ function handleReestimate(ws: ExtendedWebSocket, data: { roomId: string }) {
   });
 }
 
-function handleReset(ws: ExtendedWebSocket, data: { roomId: string }) {
+function handleReset(_ws: ExtendedWebSocket, data: { roomId: string }) {
   const { roomId } = data;
   const room = rooms.get(roomId);
   if (!room) return;
 
   room.revealed = false;
-  room.participants.forEach((p) => (p.vote = null));
+  for (const p of room.participants.values()) {
+    p.vote = null;
+  }
 
   room.lastRound = null;
   room.story = null;
@@ -411,14 +438,14 @@ function handleReset(ws: ExtendedWebSocket, data: { roomId: string }) {
 }
 
 function handleUpdateStory(
-  ws: ExtendedWebSocket,
-  data: { roomId: string; story: any },
+  _ws: ExtendedWebSocket,
+  data: { roomId: string; story: unknown },
 ) {
   const { roomId, story } = data;
   const room = rooms.get(roomId);
   if (!room) return;
 
-  room.story = story ?? null;
+  room.story = (story as { title: string; link: string } | null) ?? null;
   console.log("📥 update-story received:", { roomId, story });
   emitToRoom(roomId, "story-updated", { story: room.story });
 }
@@ -465,9 +492,12 @@ function handleDisconnect(ws: ExtendedWebSocket) {
   // This allows their votes to persist when they reconnect (e.g., after page refresh)
   // Participants are only removed when the game is explicitly reset
   // However, we still notify other clients that someone disconnected
-  rooms.forEach((room, roomId) => {
+  rooms.forEach((room, _roomId) => {
     if (room.participants.has(ws.id)) {
-      console.log("🔄 Keeping participant data for potential reconnection:", ws.id);
+      console.log(
+        "🔄 Keeping participant data for potential reconnection:",
+        ws.id,
+      );
       // Don't delete, just notify others
       // The participant will be updated with new ID when they rejoin with same name
     }
@@ -521,9 +551,11 @@ export async function shutdown(): Promise<void> {
   try {
     if (wss) {
       console.log("Closing WebSocket connections...");
-      wss.clients.forEach((client) => client.close());
+      for (const client of wss.clients) {
+        client.close();
+      }
       await new Promise<void>((resolve) => {
-        wss!.close(() => resolve());
+        wss?.close(() => resolve());
       });
       wss = null;
     }
@@ -550,12 +582,12 @@ export async function shutdown(): Promise<void> {
 
 if (require.main === module) {
   const port = parseInt(process.env.PORT || "3001", 10);
-  const httpServer = createServer((req, res) => {
+  const httpServer = createServer((_req, res) => {
     res.writeHead(200, { "Content-Type": "text/plain" });
     res.end("WebSocket server is running");
   });
 
-  httpServer.on("error", (err: any) => {
+  httpServer.on("error", (err: NodeJS.ErrnoException) => {
     if (err.code === "EADDRINUSE") {
       console.error(`❌ Port ${port} is already in use. Exiting...`);
       process.exit(1);

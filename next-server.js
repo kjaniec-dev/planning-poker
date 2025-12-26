@@ -68,7 +68,9 @@ async function gracefulShutdown(signal) {
       console.log(
         `⚠ Forcing close of ${activeConnections.size} remaining connections`,
       );
-      activeConnections.forEach((conn) => conn.destroy());
+      for (const conn of activeConnections) {
+        conn.destroy();
+      }
     }, 30000);
 
     if (process.env.REALTIME_MODE === "embedded") {

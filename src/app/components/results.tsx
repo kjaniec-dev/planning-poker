@@ -59,14 +59,17 @@ export function Results({
     });
     const numericVotes = roundParticipants.reduce<number[]>((acc, p) => {
       const num = Number(p.vote);
-      return !Number.isNaN(num) && p.vote ? [...acc, num] : acc;
+      if (!Number.isNaN(num) && p.vote) {
+        acc.push(num);
+      }
+      return acc;
     }, []);
     const avg = numericVotes.length > 0 ? calculateAverage(numericVotes) : null;
     const median =
       numericVotes.length > 0 ? calculateMedian(numericVotes) : null;
 
     return { entries, avg, median };
-  }, [participants, revealed]);
+  }, [revealed, previousRound]);
 
   return (
     <Card>

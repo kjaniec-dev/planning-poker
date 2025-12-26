@@ -622,7 +622,7 @@ func TestClientDisconnect(t *testing.T) {
 		t.Errorf("Expected 0 clients after disconnect, got %d", clientCount)
 	}
 
-	// Verify participant was removed from room
+	// Verify participant data is kept for potential reconnection
 	server.roomsMu.RLock()
 	room := server.rooms[roomID]
 	server.roomsMu.RUnlock()
@@ -630,8 +630,9 @@ func TestClientDisconnect(t *testing.T) {
 	room.mu.RLock()
 	defer room.mu.RUnlock()
 
-	if len(room.Participants) != 0 {
-		t.Errorf("Expected 0 participants after disconnect, got %d", len(room.Participants))
+	// Participant should still be in room for reconnection support
+	if len(room.Participants) != 1 {
+		t.Errorf("Expected 1 participant (kept for reconnection) after disconnect, got %d", len(room.Participants))
 	}
 }
 

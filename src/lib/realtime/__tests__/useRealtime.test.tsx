@@ -1,4 +1,4 @@
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { Server as MockWebSocketServer } from "mock-socket";
 import { useRealtime } from "../useRealtime";
 
@@ -49,7 +49,7 @@ describe("useRealtime", () => {
       renderHook(() => useRealtime("", "Alice"));
       expect(consoleSpy).toHaveBeenCalledWith(
         expect.stringContaining("Missing roomId or userName"),
-        expect.any(Object)
+        expect.any(Object),
       );
 
       consoleSpy.mockRestore();
@@ -79,7 +79,7 @@ describe("useRealtime", () => {
               story: null,
               lastRound: null,
             },
-          })
+          }),
         );
       });
 
@@ -109,7 +109,7 @@ describe("useRealtime", () => {
               story: null,
               lastRound: null,
             },
-          })
+          }),
         );
       });
 
@@ -123,7 +123,7 @@ describe("useRealtime", () => {
           JSON.stringify({
             type: "participant-voted",
             data: { id: "1", hasVote: true },
-          })
+          }),
         );
       });
 
@@ -160,7 +160,7 @@ describe("useRealtime", () => {
           JSON.stringify({
             type: "revealed",
             data: revealedData,
-          })
+          }),
         );
       });
 
@@ -191,7 +191,7 @@ describe("useRealtime", () => {
               story: { title: "Test", link: "http://test.com" },
               lastRound: { id: "123", participants: [] },
             },
-          })
+          }),
         );
       });
 
@@ -208,7 +208,7 @@ describe("useRealtime", () => {
               participants: [{ id: "1", name: "Alice", vote: null }],
               story: null,
             },
-          })
+          }),
         );
       });
 
@@ -234,7 +234,7 @@ describe("useRealtime", () => {
           JSON.stringify({
             type: "story-updated",
             data: { story },
-          })
+          }),
         );
       });
 

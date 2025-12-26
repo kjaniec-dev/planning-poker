@@ -141,7 +141,7 @@ describe("wsClient", () => {
               participants: [{ id: "1", name: "Alice", vote: null }],
               revealed: false,
             },
-          })
+          }),
         );
       });
 
@@ -224,7 +224,7 @@ describe("wsClient", () => {
         setTimeout(() => {
           expect(consoleSpy).toHaveBeenCalledWith(
             expect.stringContaining("Failed to parse message"),
-            expect.any(Error)
+            expect.any(Error),
           );
           consoleSpy.mockRestore();
           done();

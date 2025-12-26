@@ -2,7 +2,7 @@
 
 import { Ban } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/app/components/confirm-dialog";
 import { Participants } from "@/app/components/participants";
 import { Results } from "@/app/components/results";
@@ -22,7 +22,7 @@ import { useRealtime } from "@/lib/realtime/useRealtime";
 export default function GameRoomPage() {
   const params = useParams<{ room: string }>();
   const search = useSearchParams();
-  const router = useRouter();
+  const _router = useRouter();
 
   const room = (params?.room || "").toString().toUpperCase();
   const initialName = search?.get("name")?.toString() || "Guest";
@@ -51,7 +51,10 @@ export default function GameRoomPage() {
   const isPaused = Boolean(me?.paused);
 
   // SessionStorage key for persisting vote
-  const getVoteKey = () => `vote:${room}:${currentName}`;
+  const getVoteKey = useCallback(
+    () => `vote:${room}:${currentName}`,
+    [room, currentName],
+  );
 
   // Restore vote from sessionStorage on mount
   useEffect(() => {
@@ -61,18 +64,18 @@ export default function GameRoomPage() {
     if (savedVote && !revealed) {
       setSelection(savedVote);
     }
-  }, [room, currentName, isSpectator]);
+  }, [isSpectator, getVoteKey, revealed]);
 
   // Clear selection when revealed or reset
   useEffect(() => {
     if (wasRevealed.current && !revealed) {
       setSelection(null);
       sessionStorage.removeItem(getVoteKey());
-    } else if (me && me.vote != selection && !me.paused) {
+    } else if (revealed && me && me.vote !== selection) {
       setSelection(me.vote);
     }
     wasRevealed.current = revealed;
-  }, [revealed]);
+  }, [revealed, getVoteKey, me, selection]);
 
   // Wrapper for vote that persists to sessionStorage
   const handleVote = (value: string) => {

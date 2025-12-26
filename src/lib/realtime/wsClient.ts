@@ -1,6 +1,6 @@
 type WSMessage = {
   type: string;
-  data: any;
+  data: unknown;
 };
 
 type MessageListener = (msg: WSMessage) => void;
@@ -112,7 +112,7 @@ export function joinRoom(roomId: string, name: string) {
   }
 }
 
-export function sendMessage(type: string, data: any) {
+export function sendMessage(type: string, data: unknown) {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type, data }));
   } else {

@@ -1,4 +1,4 @@
-import { createServer, Server as HTTPServer } from "http";
+import { createServer, type Server as HTTPServer } from "node:http";
 import { WebSocket } from "ws";
 import { getOrCreateRoom, initWebSocketServer, shutdown } from "./index";
 
@@ -309,7 +309,10 @@ describe("WebSocket Server", () => {
       await waitForMessage(ws); // room-state
 
       // Update story
-      const story = { title: "User Authentication", link: "https://example.com/story/123" };
+      const story = {
+        title: "User Authentication",
+        link: "https://example.com/story/123",
+      };
       sendMessage(ws, "update-story", { roomId, story });
 
       const message = await waitForMessage(ws);
@@ -428,7 +431,9 @@ describe("WebSocket Server", () => {
       // Verify Alice is still in the room (data persisted for reconnection)
       room = getOrCreateRoom(roomId);
       expect(room.participants.size).toBe(2);
-      const aliceStillThere = Array.from(room.participants.values()).find(p => p.name === "Alice");
+      const aliceStillThere = Array.from(room.participants.values()).find(
+        (p) => p.name === "Alice",
+      );
       expect(aliceStillThere).toBeDefined();
 
       ws2.close();
@@ -448,7 +453,9 @@ describe("WebSocket Server", () => {
 
       // Verify vote is stored
       let room = getOrCreateRoom(roomId);
-      let alice = Array.from(room.participants.values()).find(p => p.name === "Alice");
+      let alice = Array.from(room.participants.values()).find(
+        (p) => p.name === "Alice",
+      );
       expect(alice?.vote).toBe("5");
 
       // Disconnect
@@ -458,7 +465,9 @@ describe("WebSocket Server", () => {
       // Verify Alice data is still in room (persisted)
       room = getOrCreateRoom(roomId);
       expect(room.participants.size).toBe(1);
-      alice = Array.from(room.participants.values()).find(p => p.name === "Alice");
+      alice = Array.from(room.participants.values()).find(
+        (p) => p.name === "Alice",
+      );
       expect(alice?.vote).toBe("5");
 
       // Reconnect with same name
@@ -473,7 +482,9 @@ describe("WebSocket Server", () => {
 
       // Also verify in room state
       room = getOrCreateRoom(roomId);
-      alice = Array.from(room.participants.values()).find(p => p.name === "Alice");
+      alice = Array.from(room.participants.values()).find(
+        (p) => p.name === "Alice",
+      );
       expect(alice?.vote).toBe("5");
 
       ws2.close();
@@ -495,8 +506,10 @@ describe("WebSocket Server", () => {
       await waitForMessage(ws1); // room-state
 
       // Verify state
-      let room = getOrCreateRoom(roomId);
-      let bob = Array.from(room.participants.values()).find(p => p.name === "Bob");
+      const room = getOrCreateRoom(roomId);
+      const bob = Array.from(room.participants.values()).find(
+        (p) => p.name === "Bob",
+      );
       expect(bob?.vote).toBe("8");
       expect(bob?.paused).toBe(true);
 
