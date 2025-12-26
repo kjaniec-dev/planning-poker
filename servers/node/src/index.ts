@@ -252,31 +252,31 @@ function handleMessage(ws: ExtendedWebSocket, message: WSMessage) {
 
   switch (type) {
     case "join-room":
-      handleJoinRoom(ws, data);
+      handleJoinRoom(ws, data as { roomId: string; name: string });
       break;
     case "vote":
-      handleVote(ws, data);
+      handleVote(ws, data as { roomId: string; vote: string });
       break;
     case "reveal":
-      handleReveal(ws, data);
+      handleReveal(ws, data as { roomId: string });
       break;
     case "reestimate":
-      handleReestimate(ws, data);
+      handleReestimate(ws, data as { roomId: string });
       break;
     case "reset":
-      handleReset(ws, data);
+      handleReset(ws, data as { roomId: string });
       break;
     case "update-story":
-      handleUpdateStory(ws, data);
+      handleUpdateStory(ws, data as { roomId: string; story: unknown });
       break;
     case "suspend-voting":
-      handleSuspendVoting(ws, data);
+      handleSuspendVoting(ws, data as { roomId: string });
       break;
     case "resume-voting":
-      handleResumeVoting(ws, data);
+      handleResumeVoting(ws, data as { roomId: string });
       break;
     case "update-name":
-      handleUpdateName(ws, data);
+      handleUpdateName(ws, data as { roomId: string; name: string });
       break;
     default:
       console.warn("Unknown message type:", type);
@@ -435,7 +435,7 @@ function handleUpdateStory(
   const room = rooms.get(roomId);
   if (!room) return;
 
-  room.story = story ?? null;
+  room.story = (story as { title: string; link: string } | null) ?? null;
   console.log("📥 update-story received:", { roomId, story });
   emitToRoom(roomId, "story-updated", { story: room.story });
 }
