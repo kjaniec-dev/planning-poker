@@ -275,10 +275,36 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 	room := s.getOrCreateRoom(roomID)
 
 	room.mu.Lock()
-	room.Participants[ws.ID] = &Participant{
-		ID:   ws.ID,
-		Name: name,
-		Vote: nil,
+	// Check if a participant with the same name exists (from previous connection)
+	var existingParticipant *Participant
+	var oldID string
+	for id, participant := range room.Participants {
+		if participant.Name == name {
+			existingParticipant = participant
+			oldID = id
+			break
+		}
+	}
+
+	// If participant with same name exists, restore their data with new client ID
+	if existingParticipant != nil && oldID != "" {
+		log.Printf("🔄 Restoring participant data for %s (old ID: %s, new ID: %s)", name, oldID, ws.ID)
+		// Remove old entry
+		delete(room.Participants, oldID)
+		// Add with new ID but preserve vote and paused state
+		room.Participants[ws.ID] = &Participant{
+			ID:     ws.ID,
+			Name:   name,
+			Vote:   existingParticipant.Vote,
+			Paused: existingParticipant.Paused,
+		}
+	} else {
+		// New participant
+		room.Participants[ws.ID] = &Participant{
+			ID:   ws.ID,
+			Name: name,
+			Vote: nil,
+		}
 	}
 	room.mu.Unlock()
 
@@ -466,21 +492,22 @@ func (s *Server) handleClientDisconnect(ws *ExtendedWebSocket) {
 	delete(s.clients, ws.ID)
 	s.clientsMu.Unlock()
 
-	// If the client had joined a room, remove them and notify others.
+	// Note: We intentionally DO NOT remove participants from rooms on disconnect
+	// This allows their votes to persist when they reconnect (e.g., after page refresh)
+	// Participants are only removed when the game is explicitly reset
+	// The participant will be updated with new ID when they rejoin with same name
 	if ws.RoomID != "" {
 		s.roomsMu.RLock()
 		room, exists := s.rooms[ws.RoomID]
 		s.roomsMu.RUnlock()
 
-		if !exists {
-			return
+		if exists {
+			room.mu.RLock()
+			if _, ok := room.Participants[ws.ID]; ok {
+				log.Printf("🔄 Keeping participant data for potential reconnection: %s", ws.ID)
+			}
+			room.mu.RUnlock()
 		}
-
-		room.mu.Lock()
-		delete(room.Participants, ws.ID)
-		room.mu.Unlock()
-
-		s.broadcastRoomState(ws.RoomID)
 	}
 }
 
