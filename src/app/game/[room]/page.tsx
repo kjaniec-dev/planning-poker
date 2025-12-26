@@ -50,21 +50,51 @@ export default function GameRoomPage() {
   const isSpectator = currentName === "Guest";
   const isPaused = Boolean(me?.paused);
 
+  // SessionStorage key for persisting vote
+  const getVoteKey = () => `vote:${room}:${currentName}`;
+
+  // Restore vote from sessionStorage on mount
+  useEffect(() => {
+    if (typeof window === "undefined" || isSpectator) return;
+
+    const savedVote = sessionStorage.getItem(getVoteKey());
+    if (savedVote && !revealed) {
+      setSelection(savedVote);
+    }
+  }, [room, currentName, isSpectator]);
+
+  // Clear selection when revealed or reset
   useEffect(() => {
     if (wasRevealed.current && !revealed) {
       setSelection(null);
+      sessionStorage.removeItem(getVoteKey());
     } else if (me && me.vote != selection && !me.paused) {
       setSelection(me.vote);
     }
     wasRevealed.current = revealed;
   }, [revealed]);
 
+  // Wrapper for vote that persists to sessionStorage
+  const handleVote = (value: string) => {
+    vote(value);
+    if (value) {
+      sessionStorage.setItem(getVoteKey(), value);
+    } else {
+      sessionStorage.removeItem(getVoteKey());
+    }
+  };
+
   const handleReveal = () => {
     if (!selection) return;
     reveal();
+    // Clear vote from sessionStorage after revealing
+    sessionStorage.removeItem(getVoteKey());
   };
 
-  const handleReset = () => reset();
+  const handleReset = () => {
+    reset();
+    sessionStorage.removeItem(getVoteKey());
+  };
 
   const handleBecomeParticipant = () => {
     if (!newName) return;
@@ -183,7 +213,7 @@ export default function GameRoomPage() {
                     selection={selection}
                     revealed={revealed}
                     onSelect={(s) => setSelection(s)}
-                    vote={vote}
+                    vote={handleVote}
                     resumeVoting={resumeVoting}
                     suspendVoting={suspendVoting}
                     isPaused={isPaused}
