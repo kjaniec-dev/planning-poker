@@ -366,6 +366,16 @@ function handleVote(
 
   const participant = room.participants.get(ws.id);
   if (participant) {
+    // Prevent clearing vote if paused and cards are already revealed
+    // This guards against race conditions where pause action triggers vote clearing
+    if (!vote && participant.paused && room.revealed && participant.vote) {
+      console.warn(
+        "⚠️ Prevented vote clearing for paused participant after reveal:",
+        ws.id,
+      );
+      return;
+    }
+
     participant.vote = vote;
     emitToRoom(roomId, "participant-voted", { id: ws.id, hasVote: !!vote });
   }

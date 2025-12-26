@@ -71,7 +71,7 @@ export default function GameRoomPage() {
     if (wasRevealed.current && !revealed) {
       setSelection(null);
       sessionStorage.removeItem(getVoteKey());
-    } else if (me && me.vote !== selection && !me.paused) {
+    } else if (revealed && me && me.vote !== selection) {
       setSelection(me.vote);
     }
     wasRevealed.current = revealed;
