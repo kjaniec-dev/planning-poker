@@ -3,9 +3,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Enable class-based dark mode (works with next-themes attribute="class") */
-@variant dark (&:where(.dark, .dark *));
-
 /* Map Tailwind v4 utilities to shadcn variables.
    Do NOT declare any colors here — keep shadcn defaults. */
 @theme {
