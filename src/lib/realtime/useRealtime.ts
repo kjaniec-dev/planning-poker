@@ -10,19 +10,16 @@ type Participant = {
 
 type Story = { title: string; link: string } | null;
 
-type WSMessage = {
-  type: string;
-  data: any;
+type LastRound = {
+  id: string;
+  participants: Participant[];
 };
 
 export function useRealtime(roomId: string, userName: string) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [revealed, setRevealed] = useState(false);
   const [story, setStory] = useState<Story>(null);
-  const [lastRound, setLastRound] = useState<null | {
-    id: string;
-    participants: any[];
-  }>(null);
+  const [lastRound, setLastRound] = useState<LastRound | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
@@ -33,8 +30,9 @@ export function useRealtime(roomId: string, userName: string) {
 
     joinRoom(roomId, userName);
 
-    const unsubscribe = subscribeToMessages((message: WSMessage) => {
-      const { type, data } = message;
+    const unsubscribe = subscribeToMessages((message) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { type, data } = message as { type: string; data: any };
 
       switch (type) {
         case "room-state":
@@ -82,7 +80,7 @@ export function useRealtime(roomId: string, userName: string) {
     };
   }, [roomId, userName]);
 
-  const send = (type: string, data: any) => {
+  const send = (type: string, data: Record<string, unknown>) => {
     sendMessage(type, data);
   };
 

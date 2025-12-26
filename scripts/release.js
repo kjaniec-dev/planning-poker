@@ -11,45 +11,42 @@
  *   npm run release -- 1.2.3  # Specific version
  */
 
-const { execSync } = require('node:child_process');
-const fs = require('node:fs');
-const path = require('node:path');
+const { execSync } = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
 
-const PACKAGE_PATHS = [
-  'package.json',
-  'servers/node/package.json'
-];
+const PACKAGE_PATHS = ["package.json", "servers/node/package.json"];
 
 function execCommand(command, options = {}) {
   try {
     return execSync(command, {
-      stdio: 'inherit',
-      encoding: 'utf8',
-      ...options
+      stdio: "inherit",
+      encoding: "utf8",
+      ...options,
     });
-  } catch (error) {
+  } catch (_error) {
     console.error(`Failed to execute: ${command}`);
     process.exit(1);
   }
 }
 
 function getCurrentVersion() {
-  const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+  const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
   return pkg.version;
 }
 
 function incrementVersion(version, type) {
-  const parts = version.split('.').map(Number);
+  const parts = version.split(".").map(Number);
 
   switch (type) {
-    case 'patch':
+    case "patch":
       parts[2]++;
       break;
-    case 'minor':
+    case "minor":
       parts[1]++;
       parts[2] = 0;
       break;
-    case 'major':
+    case "major":
       parts[0]++;
       parts[1] = 0;
       parts[2] = 0;
@@ -58,7 +55,7 @@ function incrementVersion(version, type) {
       throw new Error(`Invalid version type: ${type}`);
   }
 
-  return parts.join('.');
+  return parts.join(".");
 }
 
 function isValidVersion(version) {
@@ -67,9 +64,9 @@ function isValidVersion(version) {
 
 function updatePackageVersion(filePath, newVersion) {
   const fullPath = path.join(process.cwd(), filePath);
-  const pkg = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+  const pkg = JSON.parse(fs.readFileSync(fullPath, "utf8"));
   pkg.version = newVersion;
-  fs.writeFileSync(fullPath, JSON.stringify(pkg, null, 2) + '\n');
+  fs.writeFileSync(fullPath, `${JSON.stringify(pkg, null, 2)}\n`);
   console.log(`✓ Updated ${filePath} to ${newVersion}`);
 }
 
@@ -78,24 +75,28 @@ function main() {
   const versionArg = args[0];
 
   if (!versionArg) {
-    console.error('Error: Please specify version type (patch|minor|major) or version number');
-    console.error('Usage:');
-    console.error('  npm run release:patch');
-    console.error('  npm run release:minor');
-    console.error('  npm run release:major');
-    console.error('  npm run release -- 1.2.3');
+    console.error(
+      "Error: Please specify version type (patch|minor|major) or version number",
+    );
+    console.error("Usage:");
+    console.error("  npm run release:patch");
+    console.error("  npm run release:minor");
+    console.error("  npm run release:major");
+    console.error("  npm run release -- 1.2.3");
     process.exit(1);
   }
 
   // Check for uncommitted changes
   try {
-    const status = execSync('git status --porcelain', { encoding: 'utf8' });
+    const status = execSync("git status --porcelain", { encoding: "utf8" });
     if (status.trim()) {
-      console.error('Error: You have uncommitted changes. Please commit or stash them first.');
+      console.error(
+        "Error: You have uncommitted changes. Please commit or stash them first.",
+      );
       process.exit(1);
     }
-  } catch (error) {
-    console.error('Error: Failed to check git status');
+  } catch (_error) {
+    console.error("Error: Failed to check git status");
     process.exit(1);
   }
 
@@ -103,13 +104,13 @@ function main() {
   console.log(`Current version: ${currentVersion}`);
 
   let newVersion;
-  if (['patch', 'minor', 'major'].includes(versionArg)) {
+  if (["patch", "minor", "major"].includes(versionArg)) {
     newVersion = incrementVersion(currentVersion, versionArg);
   } else if (isValidVersion(versionArg)) {
     newVersion = versionArg;
   } else {
     console.error(`Error: Invalid version argument: ${versionArg}`);
-    console.error('Use: patch, minor, major, or a version number like 1.2.3');
+    console.error("Use: patch, minor, major, or a version number like 1.2.3");
     process.exit(1);
   }
 
@@ -121,19 +122,21 @@ function main() {
   }
 
   // Git commit and tag
-  console.log('\nCommitting changes...');
-  execCommand(`git add ${PACKAGE_PATHS.join(' ')}`);
+  console.log("\nCommitting changes...");
+  execCommand(`git add ${PACKAGE_PATHS.join(" ")}`);
   execCommand(`git commit -m "chore: release v${newVersion}"`);
 
-  console.log('Creating git tag...');
+  console.log("Creating git tag...");
   execCommand(`git tag v${newVersion}`);
 
-  console.log('\n✨ Release v' + newVersion + ' ready!\n');
-  console.log('To publish, run:');
+  console.log(`\n✨ Release v${newVersion} ready!\n`);
+  console.log("To publish, run:");
   console.log(`  git push origin main --tags`);
-  console.log('\nOr to push to a different branch:');
+  console.log("\nOr to push to a different branch:");
   console.log(`  git push origin $(git branch --show-current) --tags`);
-  console.log('\nThis will trigger GitHub Actions to build and push Docker images:');
+  console.log(
+    "\nThis will trigger GitHub Actions to build and push Docker images:",
+  );
   console.log(`  - planning-poker:${newVersion}`);
   console.log(`  - planning-poker-node-ws:${newVersion}`);
   console.log(`  - planning-poker-golang-ws:${newVersion}`);

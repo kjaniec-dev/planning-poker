@@ -2,6 +2,15 @@ import { createServer, type Server as HTTPServer } from "node:http";
 import { WebSocket } from "ws";
 import { getOrCreateRoom, initWebSocketServer, shutdown } from "./index";
 
+type ServerMessage = {
+  type: string;
+  data: unknown;
+};
+
+// Helper to safely access message data with type assertion
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const getData = (msg: ServerMessage) => msg.data as any;
+
 describe("WebSocket Server", () => {
   let httpServer: HTTPServer;
   let port: number;
@@ -26,11 +35,18 @@ describe("WebSocket Server", () => {
     });
   };
 
-  const sendMessage = (ws: WebSocket, type: string, data: any) => {
+  const sendMessage = (
+    ws: WebSocket,
+    type: string,
+    data: Record<string, unknown>,
+  ) => {
     ws.send(JSON.stringify({ type, data }));
   };
 
-  const waitForMessage = (ws: WebSocket, timeout = 2000): Promise<any> => {
+  const waitForMessage = (
+    ws: WebSocket,
+    timeout = 2000,
+  ): Promise<ServerMessage> => {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         reject(new Error("Message timeout"));
@@ -109,9 +125,9 @@ describe("WebSocket Server", () => {
       const message = await waitForMessage(ws);
 
       expect(message.type).toBe("room-state");
-      expect(message.data.participants).toHaveLength(1);
-      expect(message.data.participants[0].name).toBe(name);
-      expect(message.data.revealed).toBe(false);
+      expect(getData(message).participants).toHaveLength(1);
+      expect(getData(message).participants[0].name).toBe(name);
+      expect(getData(message).revealed).toBe(false);
 
       ws.close();
     });
@@ -131,7 +147,7 @@ describe("WebSocket Server", () => {
       // ws2 should receive room state with both participants
       const message2 = await waitForMessage(ws2);
       expect(message2.type).toBe("room-state");
-      expect(message2.data.participants).toHaveLength(2);
+      expect(getData(message2).participants).toHaveLength(2);
 
       // Verify room state is correct
       const room = getOrCreateRoom(roomId);
@@ -163,7 +179,7 @@ describe("WebSocket Server", () => {
 
       const message = await waitForMessage(ws);
       expect(message.type).toBe("participant-voted");
-      expect(message.data.hasVote).toBe(true);
+      expect(getData(message).hasVote).toBe(true);
 
       ws.close();
     });
@@ -182,7 +198,7 @@ describe("WebSocket Server", () => {
       // ws1 should receive participant-voted
       const msg1 = await waitForMessage(ws1);
       expect(msg1.type).toBe("participant-voted");
-      expect(msg1.data.hasVote).toBe(true);
+      expect(getData(msg1).hasVote).toBe(true);
 
       // Verify vote was recorded in room state
       const room = getOrCreateRoom(roomId);
@@ -218,10 +234,10 @@ describe("WebSocket Server", () => {
 
       const message = await waitForMessage(ws);
       expect(message.type).toBe("revealed");
-      expect(message.data.participants).toHaveLength(1);
-      expect(message.data.participants[0].vote).toBe("5");
-      expect(message.data.lastRound).toBeDefined();
-      expect(message.data.lastRound.participants).toHaveLength(1);
+      expect(getData(message).participants).toHaveLength(1);
+      expect(getData(message).participants[0].vote).toBe("5");
+      expect(getData(message).lastRound).toBeDefined();
+      expect(getData(message).lastRound.participants).toHaveLength(1);
 
       ws.close();
     });
@@ -254,8 +270,8 @@ describe("WebSocket Server", () => {
 
       const message = await waitForMessage(ws);
       expect(message.type).toBe("room-state");
-      expect(message.data.revealed).toBe(false);
-      expect(message.data.participants[0].vote).toBeNull();
+      expect(getData(message).revealed).toBe(false);
+      expect(getData(message).participants[0].vote).toBeNull();
 
       ws.close();
     });
@@ -285,8 +301,8 @@ describe("WebSocket Server", () => {
 
       const message = await waitForMessage(ws);
       expect(message.type).toBe("room-reset");
-      expect(message.data.participants[0].vote).toBeNull();
-      expect(message.data.story).toBeNull();
+      expect(getData(message).participants[0].vote).toBeNull();
+      expect(getData(message).story).toBeNull();
 
       ws.close();
     });
@@ -317,7 +333,7 @@ describe("WebSocket Server", () => {
 
       const message = await waitForMessage(ws);
       expect(message.type).toBe("story-updated");
-      expect(message.data.story).toEqual(story);
+      expect(getData(message).story).toEqual(story);
 
       ws.close();
     });
@@ -344,7 +360,7 @@ describe("WebSocket Server", () => {
 
       const message = await waitForMessage(ws);
       expect(message.type).toBe("room-state");
-      expect(message.data.participants[0].paused).toBe(true);
+      expect(getData(message).participants[0].paused).toBe(true);
 
       ws.close();
     });
@@ -365,7 +381,7 @@ describe("WebSocket Server", () => {
 
       const message = await waitForMessage(ws);
       expect(message.type).toBe("room-state");
-      expect(message.data.participants[0].paused).toBe(false);
+      expect(getData(message).participants[0].paused).toBe(false);
 
       ws.close();
     });
@@ -392,7 +408,7 @@ describe("WebSocket Server", () => {
 
       const message = await waitForMessage(ws);
       expect(message.type).toBe("room-state");
-      expect(message.data.participants[0].name).toBe("Bob");
+      expect(getData(message).participants[0].name).toBe("Bob");
 
       ws.close();
     });
@@ -476,9 +492,9 @@ describe("WebSocket Server", () => {
       const rejoinMessage = await waitForMessage(ws2);
 
       // Verify vote was restored
-      expect(rejoinMessage.data.participants).toHaveLength(1);
-      expect(rejoinMessage.data.participants[0].name).toBe("Alice");
-      expect(rejoinMessage.data.participants[0].vote).toBe("5");
+      expect(getData(rejoinMessage).participants).toHaveLength(1);
+      expect(getData(rejoinMessage).participants[0].name).toBe("Alice");
+      expect(getData(rejoinMessage).participants[0].vote).toBe("5");
 
       // Also verify in room state
       room = getOrCreateRoom(roomId);
@@ -522,8 +538,8 @@ describe("WebSocket Server", () => {
       const rejoinMessage = await waitForMessage(ws2);
 
       // Verify both vote and paused state were restored
-      expect(rejoinMessage.data.participants[0].vote).toBe("8");
-      expect(rejoinMessage.data.participants[0].paused).toBe(true);
+      expect(getData(rejoinMessage).participants[0].vote).toBe("8");
+      expect(getData(rejoinMessage).participants[0].paused).toBe(true);
 
       ws2.close();
     });
@@ -544,8 +560,8 @@ describe("WebSocket Server", () => {
       // Join
       sendMessage(ws, "join-room", { roomId, name: "Alice" });
       let message = await waitForMessage(ws);
-      expect(message.data.participants).toHaveLength(1);
-      expect(message.data.revealed).toBe(false);
+      expect(getData(message).participants).toHaveLength(1);
+      expect(getData(message).revealed).toBe(false);
 
       // Vote
       sendMessage(ws, "vote", { roomId, vote: "5" });
@@ -555,7 +571,7 @@ describe("WebSocket Server", () => {
       sendMessage(ws, "reveal", { roomId });
       message = await waitForMessage(ws);
       expect(message.type).toBe("revealed");
-      expect(message.data.participants[0].vote).toBe("5");
+      expect(getData(message).participants[0].vote).toBe("5");
 
       // Update story
       sendMessage(ws, "update-story", {
@@ -568,8 +584,8 @@ describe("WebSocket Server", () => {
       // Reestimate
       sendMessage(ws, "reestimate", { roomId });
       message = await waitForMessage(ws);
-      expect(message.data.revealed).toBe(false);
-      expect(message.data.participants[0].vote).toBeNull();
+      expect(getData(message).revealed).toBe(false);
+      expect(getData(message).participants[0].vote).toBeNull();
 
       ws.close();
     });

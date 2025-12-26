@@ -253,7 +253,7 @@ describe("useRealtime", () => {
       });
 
       const socket = mockServer.clients()[0];
-      const messages: any[] = [];
+      const messages: Array<Record<string, unknown>> = [];
 
       socket.on("message", (data) => {
         messages.push(JSON.parse(data.toString()));
@@ -271,7 +271,7 @@ describe("useRealtime", () => {
       await waitFor(() => {
         const voteMessage = messages.find((m) => m.type === "vote");
         expect(voteMessage).toBeDefined();
-        expect(voteMessage.data.vote).toBe("5");
+        expect((voteMessage?.data as Record<string, unknown>)?.vote).toBe("5");
       });
     });
 
@@ -283,7 +283,7 @@ describe("useRealtime", () => {
       });
 
       const socket = mockServer.clients()[0];
-      const messages: any[] = [];
+      const messages: Array<Record<string, unknown>> = [];
 
       socket.on("message", (data) => {
         messages.push(JSON.parse(data.toString()));
@@ -312,7 +312,7 @@ describe("useRealtime", () => {
       });
 
       const socket = mockServer.clients()[0];
-      const messages: any[] = [];
+      const messages: Array<Record<string, unknown>> = [];
 
       socket.on("message", (data) => {
         messages.push(JSON.parse(data.toString()));
@@ -330,7 +330,9 @@ describe("useRealtime", () => {
       await waitFor(() => {
         const message = messages.find((m) => m.type === "reestimate");
         expect(message).toBeDefined();
-        expect(message.data.roomId).toBe("test-room");
+        expect((message?.data as Record<string, unknown>)?.roomId).toBe(
+          "test-room",
+        );
       });
     });
 
@@ -342,7 +344,7 @@ describe("useRealtime", () => {
       });
 
       const socket = mockServer.clients()[0];
-      const messages: any[] = [];
+      const messages: Array<Record<string, unknown>> = [];
 
       socket.on("message", (data) => {
         messages.push(JSON.parse(data.toString()));
@@ -362,7 +364,9 @@ describe("useRealtime", () => {
       await waitFor(() => {
         const message = messages.find((m) => m.type === "update-story");
         expect(message).toBeDefined();
-        expect(message.data.story).toEqual(story);
+        expect((message?.data as Record<string, unknown>)?.story).toEqual(
+          story,
+        );
       });
     });
   });
