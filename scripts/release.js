@@ -2,7 +2,7 @@
 
 /**
  * Release script for Planning Poker monorepo
- * Updates versions in all package.json files, commits, and creates git tag
+ * Updates versions in all package.json files, Helm chart, commits, and creates git tag
  *
  * Usage:
  *   npm run release:patch  # 1.0.0 -> 1.0.1
@@ -16,6 +16,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const PACKAGE_PATHS = ["package.json", "servers/node/package.json"];
+const CHART_PATH = "chart/Chart.yaml";
 
 function execCommand(command, options = {}) {
   try {
@@ -70,6 +71,18 @@ function updatePackageVersion(filePath, newVersion) {
   console.log(`✓ Updated ${filePath} to ${newVersion}`);
 }
 
+function updateChartVersion(newVersion) {
+  const fullPath = path.join(process.cwd(), CHART_PATH);
+  let content = fs.readFileSync(fullPath, "utf8");
+
+  // Update both version and appVersion in Chart.yaml
+  content = content.replace(/^version: .+$/m, `version: ${newVersion}`);
+  content = content.replace(/^appVersion: .+$/m, `appVersion: "${newVersion}"`);
+
+  fs.writeFileSync(fullPath, content);
+  console.log(`✓ Updated ${CHART_PATH} to ${newVersion}`);
+}
+
 function main() {
   const args = process.argv.slice(2);
   const versionArg = args[0];
@@ -121,9 +134,12 @@ function main() {
     updatePackageVersion(pkgPath, newVersion);
   }
 
+  // Update Helm chart
+  updateChartVersion(newVersion);
+
   // Git commit and tag
   console.log("\nCommitting changes...");
-  execCommand(`git add ${PACKAGE_PATHS.join(" ")}`);
+  execCommand(`git add ${PACKAGE_PATHS.join(" ")} ${CHART_PATH}`);
   execCommand(`git commit -m "chore: release v${newVersion}"`);
 
   console.log("Creating git tag...");
