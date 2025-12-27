@@ -64,7 +64,7 @@ npm run dev:next
 
 The project supports three deployment modes via Docker Compose profiles:
 
-#### 1. Embedded Mode (Default)
+#### 1. Embedded Mode
 
 WebSocket server runs inside the Next.js custom server (single container).
 
