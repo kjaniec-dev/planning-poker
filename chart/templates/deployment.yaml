@@ -42,8 +42,31 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: {{ .Values.service.port }}
+              containerPort: {{ .Values.service.targetPort }}
               protocol: TCP
+          env:
+            - name: PORT
+              value: "{{ .Values.service.targetPort }}"
+            - name: REALTIME_MODE
+              value: "{{ .Values.planningPoker.mode }}"
+            {{- if .Values.planningPoker.env.realtimeUrl }}
+            - name: NEXT_PUBLIC_REALTIME_URL
+              value: "{{ .Values.planningPoker.env.realtimeUrl }}"
+            {{- end }}
+            {{- if .Values.planningPoker.env.redisUrl }}
+            - name: REDIS_URL
+              value: "{{ .Values.planningPoker.env.redisUrl }}"
+            {{- end }}
+            {{- if .Values.planningPoker.env.allowedOrigins }}
+            - name: ALLOWED_ORIGINS
+              value: "{{ .Values.planningPoker.env.allowedOrigins }}"
+            {{- end }}
+            - name: NODE_ENV
+              value: "production"
+            {{- range $key, $value := .Values.planningPoker.env.extra }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
           {{- with .Values.livenessProbe }}
           livenessProbe:
             {{- toYaml . | nindent 12 }}
@@ -56,14 +79,26 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-          {{- with .Values.volumeMounts }}
           volumeMounts:
+            {{- if .Values.securityContext.readOnlyRootFilesystem }}
+            - name: tmp
+              mountPath: /tmp
+            - name: nextjs-cache
+              mountPath: /app/.next/cache
+            {{- end }}
+            {{- with .Values.volumeMounts }}
             {{- toYaml . | nindent 12 }}
-          {{- end }}
-      {{- with .Values.volumes }}
+            {{- end }}
       volumes:
+        {{- if .Values.securityContext.readOnlyRootFilesystem }}
+        - name: tmp
+          emptyDir: {}
+        - name: nextjs-cache
+          emptyDir: {}
+        {{- end }}
+        {{- with .Values.volumes }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
