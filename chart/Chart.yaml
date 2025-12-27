@@ -2,8 +2,8 @@ apiVersion: v2
 name: planning-poker
 description: A real-time collaborative estimation tool for agile teams with WebSocket synchronization
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 1.0.0
+appVersion: "1.0.0"
 keywords:
   - planning-poker
   - scrum

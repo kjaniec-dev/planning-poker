@@ -9,11 +9,13 @@ replicaCount: 1
 # Container image configuration
 image:
   # Docker image repository
-  # Replace with your actual image repository
-  repository: your-registry/planning-poker
+  # For Docker Hub: username/planning-poker
+  # For other registries: registry.example.com/planning-poker
+  repository: kjaniec/planning-poker
   # Image pull policy
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion
+  # When empty, uses Chart.appVersion (1.0.0)
   tag: ""
 
 # Secrets for pulling images from private registries

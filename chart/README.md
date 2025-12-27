@@ -60,7 +60,7 @@ The following table lists the configurable parameters of the Planning Poker char
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `replicaCount` | Number of replicas | `1` |
-| `image.repository` | Image repository | `your-registry/planning-poker` |
+| `image.repository` | Image repository | `kjaniec/planning-poker` |
 | `image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `image.tag` | Image tag | `""` (uses chart appVersion) |
 | `imagePullSecrets` | Image pull secrets | `[]` |

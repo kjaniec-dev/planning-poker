@@ -249,13 +249,36 @@ npm run start:ws:go
 
 ### Kubernetes Deployment
 
-Helm chart is available in the `chart/` directory:
+#### Install from Helm Repository (Recommended)
+
+Add the Planning Poker Helm repository:
+
+```bash
+# Add the repository
+helm repo add planning-poker https://kjaniec-dev.github.io/planning-poker
+
+# Update repository index
+helm repo update
+
+# Install the chart
+helm install my-planning-poker planning-poker/planning-poker \
+  --set image.tag=1.0.0 \
+  --set planningPoker.mode=external \
+  --set planningPoker.language=node
+
+# Or with custom values file
+helm install my-planning-poker planning-poker/planning-poker -f values.yaml
+```
+
+#### Install from Local Chart
+
+For development or customization:
 
 ```bash
 helm install planning-poker ./chart \
-  --set image.tag=latest \
-  --set realtime.mode=external \
-  --set realtime.language=node
+  --set image.tag=1.0.0 \
+  --set planningPoker.mode=external \
+  --set planningPoker.language=node
 ```
 
 See [chart/README.md](./chart/README.md) for Kubernetes deployment details.
