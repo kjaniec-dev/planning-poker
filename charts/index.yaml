@@ -2,8 +2,33 @@ apiVersion: v1
 entries:
   planning-poker:
   - apiVersion: v2
+    appVersion: 1.0.4
+    created: "2025-12-27T17:24:37.53772831Z"
+    description: A real-time collaborative estimation tool for agile teams with WebSocket
+      synchronization
+    digest: 720eb9b0a3946bc1d60fd825d9707643a75d27f0693dad195d161cf932dcbfcf
+    home: https://github.com/kjaniec-dev/planning-poker
+    icon: https://raw.githubusercontent.com/kjaniec-dev/planning-poker/main/public/logo.svg
+    keywords:
+    - planning-poker
+    - scrum
+    - agile
+    - estimation
+    - websocket
+    - realtime
+    maintainers:
+    - email: contact@kjaniec.dev
+      name: kjaniec-dev
+    name: planning-poker
+    sources:
+    - https://github.com/kjaniec-dev/planning-poker
+    type: application
+    urls:
+    - https://kjaniec-dev.github.io/planning-poker/charts/planning-poker-1.0.4.tgz
+    version: 1.0.4
+  - apiVersion: v2
     appVersion: 1.0.3
-    created: "2025-12-27T17:20:17.621036626Z"
+    created: "2025-12-27T17:24:37.537078837Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: c286e89734705f62dda945258c8dc0d59369e1e515ff4b065db4ce78a8022010
@@ -28,7 +53,7 @@ entries:
     version: 1.0.3
   - apiVersion: v2
     appVersion: 1.0.2
-    created: "2025-12-27T17:20:17.620393416Z"
+    created: "2025-12-27T17:24:37.536460574Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: 5bec779dc87d9389d7d9661653accdcf56d851ecbaff831dadbe6cf3a1283bcb
@@ -53,7 +78,7 @@ entries:
     version: 1.0.2
   - apiVersion: v2
     appVersion: 1.0.0
-    created: "2025-12-27T17:20:17.619718807Z"
+    created: "2025-12-27T17:24:37.535777398Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: 722cd75c67f50151afd2349774b2af49df1aeb531e93ed2de7d79c62bfceec5e
@@ -76,4 +101,4 @@ entries:
     urls:
     - https://kjaniec-dev.github.io/planning-poker/charts/planning-poker-1.0.0.tgz
     version: 1.0.0
-generated: "2025-12-27T17:20:17.618901312Z"
+generated: "2025-12-27T17:24:37.534945606Z"
