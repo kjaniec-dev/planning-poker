@@ -6,6 +6,8 @@ on:
     paths:
       - 'servers/node/**'
       - '.github/workflows/node-websocket-server.yml'
+    tags:
+      - 'v*.*.*'
   pull_request:
     branches: [main, master]
     paths:

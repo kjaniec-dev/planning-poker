@@ -6,6 +6,8 @@ on:
     paths:
       - 'servers/golang/**'
       - '.github/workflows/golang-websocket-server.yml'
+    tags:
+      - 'v*.*.*'
   pull_request:
     branches: [main, master]
     paths:
