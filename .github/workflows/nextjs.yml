@@ -13,6 +13,8 @@ on:
       - 'tailwind.config.ts'
       - 'postcss.config.mjs'
       - '.github/workflows/nextjs.yml'
+    tags:
+      - 'v*.*.*'
   pull_request:
     branches: [main, master]
     paths:
