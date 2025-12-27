@@ -14,7 +14,7 @@ A Helm chart for deploying Planning Poker - a real-time collaborative estimation
 
 ```bash
 # If published to a Helm repository (GitHub Pages)
-helm repo add planning-poker https://kjaniec-dev.github.io/planning-poker
+helm repo add planning-poker https://kjaniec-dev.github.io/planning-poker/charts
 helm repo update
 ```
 

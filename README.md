@@ -255,7 +255,7 @@ Add the Planning Poker Helm repository:
 
 ```bash
 # Add the repository
-helm repo add planning-poker https://kjaniec-dev.github.io/planning-poker
+helm repo add planning-poker https://kjaniec-dev.github.io/planning-poker/charts
 
 # Update repository index
 helm repo update
