@@ -3,10 +3,10 @@ entries:
   planning-poker:
   - apiVersion: v2
     appVersion: 1.0.0
-    created: "2025-12-27T16:42:01.915706203Z"
+    created: "2025-12-27T17:00:15.615867849Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
-    digest: 799466f25b41c038235efb62fc434958fa9321824c7c1a5c6d279a9698de1e31
+    digest: 722cd75c67f50151afd2349774b2af49df1aeb531e93ed2de7d79c62bfceec5e
     home: https://github.com/kjaniec-dev/planning-poker
     icon: https://raw.githubusercontent.com/kjaniec-dev/planning-poker/main/public/logo.svg
     keywords:
@@ -26,4 +26,4 @@ entries:
     urls:
     - https://kjaniec-dev.github.io/planning-poker/charts/planning-poker-1.0.0.tgz
     version: 1.0.0
-generated: "2025-12-27T16:42:01.914906395Z"
+generated: "2025-12-27T17:00:15.615085158Z"
