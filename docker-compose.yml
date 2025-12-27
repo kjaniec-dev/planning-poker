@@ -1,0 +1,126 @@
+services:
+
+  app-with-embedded-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production-embedded
+      args:
+        NEXT_PUBLIC_REALTIME_URL: ""
+    environment:
+      REALTIME_MODE: embedded
+      # REDIS_URL is optional; if set, embedded server will use redis adapter
+      REDIS_URL: ${REDIS_URL:-}
+    ports:
+      - "3000:3000"
+    profiles: [embedded]
+    # Security: Read-only filesystem where possible
+    read_only: true
+    tmpfs:
+      - /tmp
+    # Security: Drop all capabilities
+    cap_drop:
+      - ALL
+    # Security: No new privileges
+    security_opt:
+      - no-new-privileges:true
+
+  app-external:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production-standalone
+      args:
+        NEXT_PUBLIC_REALTIME_URL: "http://localhost:3001"
+    environment:
+      HOSTNAME: "0.0.0.0"
+      REALTIME_MODE: external
+      REDIS_URL: ${REDIS_URL:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - node-websocket-server
+    profiles: [external]
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  node-websocket-server:
+    build:
+      context: ./servers/${REALTIME_LANGUAGE:-node}
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3001
+      REDIS_URL: ${REDIS_URL:-}
+      ALLOWED_ORIGINS: "http://localhost:3000,https://localhost:3000"
+    ports:
+      - "3001:3001"
+    profiles: [external]
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  app-external-go:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production-standalone
+      args:
+        NEXT_PUBLIC_REALTIME_URL: "http://localhost:3001"
+    environment:
+      HOSTNAME: "0.0.0.0"
+      REALTIME_MODE: external
+      REDIS_URL: ${REDIS_URL:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - realtime-server-go
+    profiles: [ external-go ]
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  realtime-server-go:
+    build:
+      context: ./servers/golang
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3001
+      REDIS_URL: ${REDIS_URL:-}
+      ALLOWED_ORIGINS: "http://localhost:3000,https://localhost:3000"
+    ports:
+      - "3001:3001"
+    profiles: [ external-go ]
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  # Optional Redis for scaling for websockets (only if you need to scale)
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    profiles: [redis]
+    # Security hardening for Redis
+    command: redis-server --protected-mode yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    read_only: true
+    tmpfs:
+      - /data
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
