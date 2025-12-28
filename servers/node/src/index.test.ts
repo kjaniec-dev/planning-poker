@@ -156,6 +156,66 @@ describe("WebSocket Server", () => {
       ws1.close();
       ws2.close();
     });
+
+    test("should handle multiple guests with duplicate names", async () => {
+      const ws1 = await createWSConnection();
+      const ws2 = await createWSConnection();
+      const roomId = "test-room";
+
+      // First guest joins
+      sendMessage(ws1, "join-room", { roomId, name: "Guest" });
+      const msg1 = await waitForMessage(ws1);
+      expect(msg1.type).toBe("room-state");
+      expect(getData(msg1).participants).toHaveLength(1);
+      expect(getData(msg1).participants[0].name).toBe("Guest");
+
+      // Second guest joins with same name
+      sendMessage(ws2, "join-room", { roomId, name: "Guest" });
+      const msg2 = await waitForMessage(ws2);
+      expect(msg2.type).toBe("room-state");
+      expect(getData(msg2).participants).toHaveLength(2);
+
+      // Verify room state has both participants with unique names
+      const room = getOrCreateRoom(roomId);
+      expect(room.participants.size).toBe(2);
+      const participants = Array.from(room.participants.values());
+      const names = participants.map((p) => p.name).sort();
+      expect(names).toEqual(["Guest", "Guest 2"]);
+
+      // Small delay to ensure all broadcasts are processed
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // First guest should be able to change name (become a player)
+      sendMessage(ws1, "update-name", { roomId, name: "Alice" });
+      const msg3 = await waitForMessage(ws1);
+      expect(msg3.type).toBe("room-state");
+
+      // Small delay to ensure update is processed
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Verify first guest's name was updated
+      const updatedRoom = getOrCreateRoom(roomId);
+      const updatedParticipants = Array.from(updatedRoom.participants.values());
+      const updatedNames = updatedParticipants.map((p) => p.name).sort();
+      expect(updatedNames).toEqual(["Alice", "Guest 2"]);
+
+      // Second guest should also be able to change name
+      sendMessage(ws2, "update-name", { roomId, name: "Bob" });
+      const msg4 = await waitForMessage(ws2);
+      expect(msg4.type).toBe("room-state");
+
+      // Small delay to ensure update is processed
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Verify both names are updated
+      const finalRoom = getOrCreateRoom(roomId);
+      const finalParticipants = Array.from(finalRoom.participants.values());
+      const finalNames = finalParticipants.map((p) => p.name).sort();
+      expect(finalNames).toEqual(["Alice", "Bob"]);
+
+      ws1.close();
+      ws2.close();
+    });
   });
 
   describe("Message Handling - vote", () => {

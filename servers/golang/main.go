@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -286,8 +287,13 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 		}
 	}
 
-	// If participant with same name exists, restore their data with new client ID
-	if existingParticipant != nil && oldID != "" {
+	// Check if this is a reconnection or a duplicate name from an active connection
+	s.clientsMu.RLock()
+	oldClientStillConnected := oldID != "" && s.clients[oldID] != nil
+	s.clientsMu.RUnlock()
+
+	if existingParticipant != nil && oldID != "" && !oldClientStillConnected {
+		// This is a legitimate reconnection - the old client is gone
 		log.Printf("🔄 Restoring participant data for %s (old ID: %s, new ID: %s)", name, oldID, ws.ID)
 		// Remove old entry
 		delete(room.Participants, oldID)
@@ -297,6 +303,35 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 			Name:   name,
 			Vote:   existingParticipant.Vote,
 			Paused: existingParticipant.Paused,
+		}
+	} else if existingParticipant != nil && oldClientStillConnected {
+		// Duplicate name from an active connection - generate unique name
+		uniqueName := name
+		counter := 2
+
+		// Find a unique name by appending numbers
+		for {
+			nameExists := false
+			for _, p := range room.Participants {
+				if p.Name == uniqueName {
+					nameExists = true
+					break
+				}
+			}
+			if !nameExists {
+				break
+			}
+			uniqueName = name + " " + strconv.Itoa(counter)
+			counter++
+		}
+
+		log.Printf("⚠️ Duplicate name detected. Renaming %s to %s for client %s", name, uniqueName, ws.ID)
+
+		// Create new participant with unique name
+		room.Participants[ws.ID] = &Participant{
+			ID:   ws.ID,
+			Name: uniqueName,
+			Vote: nil,
 		}
 	} else {
 		// New participant

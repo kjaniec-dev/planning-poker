@@ -315,8 +315,11 @@ function handleJoinRoom(
     }
   }
 
-  // If participant with same name exists, restore their data with new client ID
-  if (existingParticipant && oldId) {
+  // Check if this is a reconnection or a duplicate name from an active connection
+  const oldClientStillConnected = oldId ? clients.has(oldId) : false;
+
+  if (existingParticipant && oldId && !oldClientStillConnected) {
+    // This is a legitimate reconnection - the old client is gone
     console.log(
       "🔄 Restoring participant data for %s (old ID: %s, new ID: %s)",
       name,
@@ -332,6 +335,30 @@ function handleJoinRoom(
       vote: existingParticipant.vote,
       paused: existingParticipant.paused,
     });
+  } else if (existingParticipant && oldClientStillConnected) {
+    // Duplicate name from an active connection - generate unique name
+    let uniqueName = name;
+    let counter = 2;
+
+    // Find a unique name by appending numbers
+    while (
+      Array.from(room.participants.values()).some(
+        (p) => p.name === uniqueName,
+      )
+    ) {
+      uniqueName = `${name} ${counter}`;
+      counter++;
+    }
+
+    console.log(
+      "⚠️ Duplicate name detected. Renaming %s to %s for client %s",
+      name,
+      uniqueName,
+      ws.id,
+    );
+
+    // Create new participant with unique name
+    room.participants.set(ws.id, { id: ws.id, name: uniqueName, vote: null });
   } else {
     // New participant
     room.participants.set(ws.id, { id: ws.id, name, vote: null });

@@ -161,6 +161,159 @@ func TestHandleJoinRoom(t *testing.T) {
 	room.mu.RUnlock()
 }
 
+func TestMultipleGuestsWithDuplicateNames(t *testing.T) {
+	server := NewServer()
+	httpServer, ws1 := createTestWSConnection(t, server)
+	defer httpServer.Close()
+	defer ws1.Close()
+
+	// Create second WebSocket connection
+	wsURL := "ws" + httpServer.URL[4:] + "/api/ws"
+	ws2, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatalf("Failed to create second WebSocket connection: %v", err)
+	}
+	defer ws2.Close()
+
+	roomID := "test-room"
+
+	// First guest joins
+	sendMessage(t, ws1, "join-room", map[string]interface{}{
+		"roomId": roomID,
+		"name":   "Guest",
+	})
+	msg1 := readMessage(t, ws1, 2*time.Second)
+	if msg1.Type != "room-state" {
+		t.Errorf("Expected room-state message for ws1, got %s", msg1.Type)
+	}
+
+	// Verify first guest is named "Guest"
+	data1 := msg1.Data.(map[string]interface{})
+	participants1 := data1["participants"].([]interface{})
+	if len(participants1) != 1 {
+		t.Errorf("Expected 1 participant after first guest joins, got %d", len(participants1))
+	}
+	p1 := participants1[0].(map[string]interface{})
+	if p1["name"] != "Guest" {
+		t.Errorf("Expected first guest name to be 'Guest', got %s", p1["name"])
+	}
+
+	// Second guest joins with same name
+	sendMessage(t, ws2, "join-room", map[string]interface{}{
+		"roomId": roomID,
+		"name":   "Guest",
+	})
+	msg2 := readMessage(t, ws2, 2*time.Second)
+	if msg2.Type != "room-state" {
+		t.Errorf("Expected room-state message for ws2, got %s", msg2.Type)
+	}
+
+	// Verify room has 2 participants with unique names
+	server.roomsMu.RLock()
+	room := server.rooms[roomID]
+	server.roomsMu.RUnlock()
+
+	room.mu.RLock()
+	if len(room.Participants) != 2 {
+		t.Errorf("Expected 2 participants in room, got %d", len(room.Participants))
+	}
+
+	// Collect participant names
+	names := make([]string, 0, 2)
+	for _, p := range room.Participants {
+		names = append(names, p.Name)
+	}
+	room.mu.RUnlock()
+
+	// Verify both "Guest" and "Guest 2" exist
+	hasGuest := false
+	hasGuest2 := false
+	for _, name := range names {
+		if name == "Guest" {
+			hasGuest = true
+		}
+		if name == "Guest 2" {
+			hasGuest2 = true
+		}
+	}
+	if !hasGuest || !hasGuest2 {
+		t.Errorf("Expected participants 'Guest' and 'Guest 2', got %v", names)
+	}
+
+	// Small delay to ensure all broadcasts are processed
+	time.Sleep(50 * time.Millisecond)
+
+	// First guest should be able to change name (become a player)
+	sendMessage(t, ws1, "update-name", map[string]interface{}{
+		"roomId": roomID,
+		"name":   "Alice",
+	})
+	msg3 := readMessage(t, ws1, 2*time.Second)
+	if msg3.Type != "room-state" {
+		t.Errorf("Expected room-state message after update-name, got %s", msg3.Type)
+	}
+
+	// Small delay to ensure update is processed
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify first guest's name was updated
+	room.mu.RLock()
+	updatedNames := make([]string, 0, 2)
+	for _, p := range room.Participants {
+		updatedNames = append(updatedNames, p.Name)
+	}
+	room.mu.RUnlock()
+
+	hasAlice := false
+	hasGuest2AfterUpdate := false
+	for _, name := range updatedNames {
+		if name == "Alice" {
+			hasAlice = true
+		}
+		if name == "Guest 2" {
+			hasGuest2AfterUpdate = true
+		}
+	}
+	if !hasAlice || !hasGuest2AfterUpdate {
+		t.Errorf("Expected participants 'Alice' and 'Guest 2' after update, got %v", updatedNames)
+	}
+
+	// Second guest should also be able to change name
+	sendMessage(t, ws2, "update-name", map[string]interface{}{
+		"roomId": roomID,
+		"name":   "Bob",
+	})
+	msg4 := readMessage(t, ws2, 2*time.Second)
+	if msg4.Type != "room-state" {
+		t.Errorf("Expected room-state message after second update-name, got %s", msg4.Type)
+	}
+
+	// Small delay to ensure update is processed
+	time.Sleep(50 * time.Millisecond)
+
+	// Verify both names are updated
+	room.mu.RLock()
+	finalNames := make([]string, 0, 2)
+	for _, p := range room.Participants {
+		finalNames = append(finalNames, p.Name)
+	}
+	room.mu.RUnlock()
+
+	hasBob := false
+	hasAliceFinal := false
+	for _, name := range finalNames {
+		if name == "Alice" {
+			hasAliceFinal = true
+		}
+		if name == "Bob" {
+			hasBob = true
+		}
+	}
+	if !hasAliceFinal || !hasBob {
+		t.Errorf("Expected participants 'Alice' and 'Bob' after both updates, got %v", finalNames)
+	}
+}
+
 func TestHandleVote(t *testing.T) {
 	server := NewServer()
 	httpServer, ws := createTestWSConnection(t, server)
