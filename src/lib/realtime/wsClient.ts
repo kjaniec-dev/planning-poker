@@ -13,7 +13,17 @@ let reconnectAttempts = 0;
 const maxReconnectAttempts = 10;
 let reconnectTimeout: number | null = null;
 
-let lastJoin: { roomId: string; name: string } | null = null;
+let lastJoin: { roomId: string; name: string; participantId: string } | null = null;
+
+function getOrCreateParticipantId(): string {
+  const stored = sessionStorage.getItem("planning-poker-participant-id");
+  if (stored) {
+    return stored;
+  }
+  const newId = crypto.randomUUID();
+  sessionStorage.setItem("planning-poker-participant-id", newId);
+  return newId;
+}
 
 function getSocketUrl(): string {
   let baseUrl = process.env.NEXT_PUBLIC_REALTIME_URL || window.location.origin;
@@ -39,7 +49,11 @@ function doJoinIfNeeded() {
   if (socket && socket.readyState === WebSocket.OPEN && lastJoin) {
     const joinMessage = {
       type: "join-room",
-      data: { roomId: lastJoin.roomId, name: lastJoin.name },
+      data: {
+        roomId: lastJoin.roomId,
+        name: lastJoin.name,
+        participantId: lastJoin.participantId,
+      },
     };
     socket.send(JSON.stringify(joinMessage));
   }
@@ -105,7 +119,8 @@ export function connectIfNeeded() {
 }
 
 export function joinRoom(roomId: string, name: string) {
-  lastJoin = { roomId, name };
+  const participantId = getOrCreateParticipantId();
+  lastJoin = { roomId, name, participantId };
   connectIfNeeded();
   if (socket && socket.readyState === WebSocket.OPEN) {
     doJoinIfNeeded();
@@ -117,6 +132,12 @@ export function sendMessage(type: string, data: unknown) {
     socket.send(JSON.stringify({ type, data }));
   } else {
     console.warn("⚠️ [wsClient] WebSocket not connected, cannot send:", type);
+  }
+}
+
+export function updateLastJoinName(name: string) {
+  if (lastJoin) {
+    lastJoin = { ...lastJoin, name };
   }
 }
 

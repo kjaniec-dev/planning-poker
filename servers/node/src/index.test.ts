@@ -366,6 +366,34 @@ describe("WebSocket Server", () => {
 
       ws.close();
     });
+
+    test("should clear lastRound when resetting after reveal", async () => {
+      const ws = await createWSConnection();
+      const roomId = "test-room";
+
+      // Join, vote, and reveal
+      sendMessage(ws, "join-room", { roomId, name: "Alice" });
+      await waitForMessage(ws); // room-state
+
+      sendMessage(ws, "vote", { roomId, vote: "5" });
+      await waitForMessage(ws); // participant-voted
+
+      sendMessage(ws, "reveal", { roomId });
+      const revealMessage = await waitForMessage(ws);
+      expect(revealMessage.type).toBe("revealed");
+      expect(getData(revealMessage).lastRound).toBeDefined();
+
+      // Reset should clear lastRound
+      sendMessage(ws, "reset", { roomId });
+      const resetMessage = await waitForMessage(ws);
+      expect(resetMessage.type).toBe("room-reset");
+
+      // Verify lastRound is cleared in server state
+      const room = getOrCreateRoom(roomId);
+      expect(room.lastRound).toBeNull();
+
+      ws.close();
+    });
   });
 
   describe("Message Handling - update-story", () => {
@@ -469,6 +497,31 @@ describe("WebSocket Server", () => {
       const message = await waitForMessage(ws);
       expect(message.type).toBe("room-state");
       expect(getData(message).participants[0].name).toBe("Bob");
+
+      ws.close();
+    });
+
+    test("should handle same connection rejoining after update-name", async () => {
+      const ws = await createWSConnection();
+      const roomId = "test-room";
+      const participantId = "test-participant-id";
+
+      // Join room with participantId
+      sendMessage(ws, "join-room", { roomId, name: "Guest", participantId });
+      await waitForMessage(ws); // room-state
+
+      // Update name
+      sendMessage(ws, "update-name", { roomId, name: "KJ2" });
+      await waitForMessage(ws); // room-state from update-name
+
+      // Client sends join-room again (simulating what happens in real scenario)
+      sendMessage(ws, "join-room", { roomId, name: "KJ2", participantId });
+      const message = await waitForMessage(ws);
+
+      // Should NOT get "KJ2 2", should stay as "KJ2"
+      expect(message.type).toBe("room-state");
+      expect(getData(message).participants).toHaveLength(1);
+      expect(getData(message).participants[0].name).toBe("KJ2");
 
       ws.close();
     });
@@ -600,6 +653,48 @@ describe("WebSocket Server", () => {
       // Verify both vote and paused state were restored
       expect(getData(rejoinMessage).participants[0].vote).toBe("8");
       expect(getData(rejoinMessage).participants[0].paused).toBe(true);
+
+      ws2.close();
+    });
+
+    test("should allow name change to disconnected participant's name", async () => {
+      const roomId = "test-room";
+
+      // First user joins with name "KJ2"
+      const ws1 = await createWSConnection();
+      sendMessage(ws1, "join-room", { roomId, name: "KJ2" });
+      await waitForMessage(ws1);
+
+      // Verify KJ2 is in the room
+      let room = getOrCreateRoom(roomId);
+      expect(room.participants.size).toBe(1);
+
+      // KJ2 disconnects (but data persists for reconnection)
+      ws1.close();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Verify KJ2 is still in room data but disconnected
+      room = getOrCreateRoom(roomId);
+      expect(room.participants.size).toBe(1);
+
+      // New guest joins
+      const ws2 = await createWSConnection();
+      sendMessage(ws2, "join-room", { roomId, name: "Guest" });
+      await waitForMessage(ws2);
+
+      // Guest changes name to "KJ2" - should succeed without " 2" suffix
+      // because the original KJ2 is disconnected
+      sendMessage(ws2, "update-name", { roomId, name: "KJ2" });
+      const updateMessage = await waitForMessage(ws2);
+
+      // Verify the name was updated to "KJ2", NOT "KJ2 2"
+      expect(updateMessage.type).toBe("room-state");
+      const updatedRoom = getOrCreateRoom(roomId);
+      const participants = Array.from(updatedRoom.participants.values());
+      const activeParticipant = participants.find(
+        (p) => p.name === "KJ2" || p.name === "KJ2 2",
+      );
+      expect(activeParticipant?.name).toBe("KJ2");
 
       ws2.close();
     });

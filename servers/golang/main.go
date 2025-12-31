@@ -19,10 +19,11 @@ import (
 )
 
 type Participant struct {
-	ID     string  `json:"id"`
-	Name   string  `json:"name"`
-	Vote   *string `json:"vote"`
-	Paused bool    `json:"paused,omitempty"`
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Vote          *string `json:"vote"`
+	Paused        bool    `json:"paused,omitempty"`
+	ParticipantId string  `json:"participantId,omitempty"`
 }
 
 type Story struct {
@@ -270,20 +271,35 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 		return
 	}
 	name, _ := data["name"].(string)
-	log.Printf("📥 join-room: roomId=%s, name=%s, clientId=%s", roomID, name, ws.ID)
+	participantId, _ := data["participantId"].(string)
+	log.Printf("📥 join-room: roomId=%s, name=%s, participantId=%s, clientId=%s", roomID, name, participantId, ws.ID)
 
 	ws.RoomID = roomID
 	room := s.getOrCreateRoom(roomID)
 
 	room.mu.Lock()
-	// Check if a participant with the same name exists (from previous connection)
+	// First, try to match by participantId if provided
 	var existingParticipant *Participant
 	var oldID string
-	for id, participant := range room.Participants {
-		if participant.Name == name {
-			existingParticipant = participant
-			oldID = id
-			break
+
+	if participantId != "" {
+		for id, participant := range room.Participants {
+			if participant.ParticipantId == participantId {
+				existingParticipant = participant
+				oldID = id
+				break
+			}
+		}
+	}
+
+	// If no participantId match, fall back to matching by name (backwards compatibility)
+	if existingParticipant == nil {
+		for id, participant := range room.Participants {
+			if participant.Name == name {
+				existingParticipant = participant
+				oldID = id
+				break
+			}
 		}
 	}
 
@@ -292,32 +308,47 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 	oldClientStillConnected := oldID != "" && s.clients[oldID] != nil
 	s.clientsMu.RUnlock()
 
-	if existingParticipant != nil && oldID != "" && !oldClientStillConnected {
+	// Special case: if oldID == ws.ID, this is the same connection updating their info
+	// (e.g., after an update-name), so just update the participant in place
+	if existingParticipant != nil && oldID == ws.ID {
+		log.Printf("🔄 Same connection updating info for %s (ID: %s)", name, ws.ID)
+		room.Participants[ws.ID].Name = name
+		// Don't need to do anything else, participant already exists
+	} else if existingParticipant != nil && oldID != "" && !oldClientStillConnected {
 		// This is a legitimate reconnection - the old client is gone
 		log.Printf("🔄 Restoring participant data for %s (old ID: %s, new ID: %s)", name, oldID, ws.ID)
 		// Remove old entry
 		delete(room.Participants, oldID)
-		// Add with new ID but preserve vote and paused state
+		// Add with new ID but preserve vote, paused state, and participantId
+		persistedParticipantId := participantId
+		if persistedParticipantId == "" {
+			persistedParticipantId = existingParticipant.ParticipantId
+		}
 		room.Participants[ws.ID] = &Participant{
-			ID:     ws.ID,
-			Name:   name,
-			Vote:   existingParticipant.Vote,
-			Paused: existingParticipant.Paused,
+			ID:            ws.ID,
+			Name:          name,
+			Vote:          existingParticipant.Vote,
+			Paused:        existingParticipant.Paused,
+			ParticipantId: persistedParticipantId,
 		}
 	} else if existingParticipant != nil && oldClientStillConnected {
 		// Duplicate name from an active connection - generate unique name
+		// Only check connected participants to avoid conflicts with disconnected users
 		uniqueName := name
 		counter := 2
 
 		// Find a unique name by appending numbers
 		for {
 			nameExists := false
+			s.clientsMu.RLock()
 			for _, p := range room.Participants {
-				if p.Name == uniqueName {
+				// Only check if participant is still connected
+				if p.Name == uniqueName && s.clients[p.ID] != nil {
 					nameExists = true
 					break
 				}
 			}
+			s.clientsMu.RUnlock()
 			if !nameExists {
 				break
 			}
@@ -329,16 +360,18 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 
 		// Create new participant with unique name
 		room.Participants[ws.ID] = &Participant{
-			ID:   ws.ID,
-			Name: uniqueName,
-			Vote: nil,
+			ID:            ws.ID,
+			Name:          uniqueName,
+			Vote:          nil,
+			ParticipantId: participantId,
 		}
 	} else {
 		// New participant
 		room.Participants[ws.ID] = &Participant{
-			ID:   ws.ID,
-			Name: name,
-			Vote: nil,
+			ID:            ws.ID,
+			Name:          name,
+			Vote:          nil,
+			ParticipantId: participantId,
 		}
 	}
 	room.mu.Unlock()
@@ -444,13 +477,14 @@ func (s *Server) handleReset(ws *ExtendedWebSocket, data map[string]interface{})
 	for _, p := range room.Participants {
 		p.Vote = nil
 	}
+	room.LastRound = nil
+	room.Story = nil
 	participants := s.getParticipantsArray(room)
-	story := room.Story
 	room.mu.Unlock()
 
 	roomReset := map[string]interface{}{
 		"participants": participants,
-		"story":        story,
+		"story":        nil,
 	}
 	s.broadcastToRoom(roomID, "room-reset", roomReset)
 }
@@ -568,7 +602,35 @@ func (s *Server) handleUpdateName(ws *ExtendedWebSocket, data map[string]interfa
 
 	room.mu.Lock()
 	if participant, ok := room.Participants[ws.ID]; ok {
-		participant.Name = name
+		// Check if the new name is already taken by another ACTIVE participant
+		// Only check connected participants to avoid conflicts with disconnected users
+		finalName := name
+		counter := 2
+
+		for {
+			nameExists := false
+			s.clientsMu.RLock()
+			for _, p := range room.Participants {
+				// Only check if participant is still connected
+				if p.ID != ws.ID && p.Name == finalName && s.clients[p.ID] != nil {
+					nameExists = true
+					break
+				}
+			}
+			s.clientsMu.RUnlock()
+			if !nameExists {
+				break
+			}
+			finalName = name + " " + strconv.Itoa(counter)
+			counter++
+		}
+
+		if finalName != name {
+			log.Printf("⚠️ Name '%s' already taken. Using '%s' instead for client %s", name, finalName, ws.ID)
+		}
+
+		log.Printf("✏️ Updating participant name from '%s' to '%s'", participant.Name, finalName)
+		participant.Name = finalName
 	}
 	room.mu.Unlock()
 
