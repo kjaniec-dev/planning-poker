@@ -46,7 +46,13 @@ export type RoomState = {
   id: string;
   participants: Map<
     string,
-    { id: string; name: string; vote: string | null; paused?: boolean }
+    {
+      id: string;
+      name: string;
+      vote: string | null;
+      paused?: boolean;
+      participantId?: string;
+    }
   >;
   revealed: boolean;
   lastRound?: {
@@ -285,38 +291,66 @@ function handleMessage(ws: ExtendedWebSocket, message: WSMessage) {
 
 function handleJoinRoom(
   ws: ExtendedWebSocket,
-  data: { roomId: string; name: string },
+  data: { roomId: string; name: string; participantId?: string },
 ) {
-  const { roomId, name } = data;
+  const { roomId, name, participantId } = data;
   console.log(
-    "📥 join-room: roomId=%s, name=%s, clientId=%s",
+    "📥 join-room: roomId=%s, name=%s, participantId=%s, clientId=%s",
     roomId,
     name,
+    participantId,
     ws.id,
   );
   ws.roomId = roomId;
 
   const room = getOrCreateRoom(roomId);
 
-  // Check if a participant with the same name exists (from previous connection)
+  // First, try to match by participantId if provided
   let existingParticipant: {
     id: string;
     name: string;
     vote: string | null;
     paused?: boolean;
+    participantId?: string;
   } | null = null;
   let oldId: string | null = null;
 
-  for (const [id, participant] of room.participants.entries()) {
-    if (participant.name === name) {
-      existingParticipant = participant;
-      oldId = id;
-      break;
+  if (participantId) {
+    for (const [id, participant] of room.participants.entries()) {
+      if (participant.participantId === participantId) {
+        existingParticipant = participant;
+        oldId = id;
+        break;
+      }
     }
   }
 
-  // If participant with same name exists, restore their data with new client ID
-  if (existingParticipant && oldId) {
+  // If no participantId match, fall back to matching by name (backwards compatibility)
+  if (!existingParticipant) {
+    for (const [id, participant] of room.participants.entries()) {
+      if (participant.name === name) {
+        existingParticipant = participant;
+        oldId = id;
+        break;
+      }
+    }
+  }
+
+  // Check if this is a reconnection or a duplicate name from an active connection
+  const oldClientStillConnected = oldId ? clients.has(oldId) : false;
+
+  // Special case: if oldId == ws.id, this is the same connection updating their info
+  // (e.g., after an update-name), so just update the participant in place
+  if (existingParticipant && oldId === ws.id) {
+    console.log(
+      "🔄 Same connection updating info for %s (ID: %s)",
+      name,
+      ws.id,
+    );
+    existingParticipant.name = name;
+    // Don't need to do anything else, participant already exists
+  } else if (existingParticipant && oldId && !oldClientStillConnected) {
+    // This is a legitimate reconnection - the old client is gone
     console.log(
       "🔄 Restoring participant data for %s (old ID: %s, new ID: %s)",
       name,
@@ -325,16 +359,52 @@ function handleJoinRoom(
     );
     // Remove old entry
     room.participants.delete(oldId);
-    // Add with new ID but preserve vote and paused state
+    // Add with new ID but preserve vote, paused state, and participantId
     room.participants.set(ws.id, {
       id: ws.id,
       name,
       vote: existingParticipant.vote,
       paused: existingParticipant.paused,
+      participantId: participantId || existingParticipant.participantId,
+    });
+  } else if (existingParticipant && oldClientStillConnected) {
+    // Duplicate name from an active connection - generate unique name
+    // Only check connected participants to avoid conflicts with disconnected users
+    let uniqueName = name;
+    let counter = 2;
+
+    // Find a unique name by appending numbers
+    while (
+      Array.from(room.participants.values()).some(
+        (p) => p.name === uniqueName && clients.has(p.id),
+      )
+    ) {
+      uniqueName = `${name} ${counter}`;
+      counter++;
+    }
+
+    console.log(
+      "⚠️ Duplicate name detected. Renaming %s to %s for client %s",
+      name,
+      uniqueName,
+      ws.id,
+    );
+
+    // Create new participant with unique name
+    room.participants.set(ws.id, {
+      id: ws.id,
+      name: uniqueName,
+      vote: null,
+      participantId,
     });
   } else {
     // New participant
-    room.participants.set(ws.id, { id: ws.id, name, vote: null });
+    room.participants.set(ws.id, {
+      id: ws.id,
+      name,
+      vote: null,
+      participantId,
+    });
   }
 
   const roomState = {
@@ -529,12 +599,35 @@ function handleUpdateName(
     return;
   }
 
+  // Check if the new name is already taken by another ACTIVE participant
+  // Only check connected participants to avoid conflicts with disconnected users
+  let finalName = name;
+  let counter = 2;
+
+  while (
+    Array.from(room.participants.values()).some(
+      (p) => p.id !== ws.id && p.name === finalName && clients.has(p.id),
+    )
+  ) {
+    finalName = `${name} ${counter}`;
+    counter++;
+  }
+
+  if (finalName !== name) {
+    console.log(
+      "⚠️ Name '%s' already taken. Using '%s' instead for client %s",
+      name,
+      finalName,
+      ws.id,
+    );
+  }
+
   console.log(
     "✏️ Updating participant name from '%s' to '%s'",
     participant.name,
-    name,
+    finalName,
   );
-  participant.name = name;
+  participant.name = finalName;
 
   const roomState = {
     participants: Array.from(room.participants.values()),

@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { joinRoom, sendMessage, subscribeToMessages } from "./wsClient";
+import {
+  joinRoom,
+  sendMessage,
+  subscribeToMessages,
+  updateLastJoinName,
+} from "./wsClient";
 
 type Participant = {
   id: string;
@@ -114,6 +119,7 @@ export function useRealtime(roomId: string, userName: string) {
 
   const updateName = (newName: string) => {
     send("update-name", { roomId, name: newName });
+    updateLastJoinName(newName);
   };
 
   return {
