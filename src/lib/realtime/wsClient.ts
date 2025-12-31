@@ -13,7 +13,8 @@ let reconnectAttempts = 0;
 const maxReconnectAttempts = 10;
 let reconnectTimeout: number | null = null;
 
-let lastJoin: { roomId: string; name: string; participantId: string } | null = null;
+let lastJoin: { roomId: string; name: string; participantId: string } | null =
+  null;
 
 function getOrCreateParticipantId(): string {
   const stored = sessionStorage.getItem("planning-poker-participant-id");
