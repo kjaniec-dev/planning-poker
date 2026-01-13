@@ -16,10 +16,11 @@ This document outlines proposed UX and UI improvements to enhance the user exper
 *   **Impact:** Speeds up the estimation process.
 *   **Implementation:** Added `autoReveal` to room state on server. New `toggle-auto-reveal` message. Logic in `handleVote` to trigger reveal when all active participants have voted if `autoReveal` is enabled. UI toggle added to `GameRoomPage`.
 
-### 3. Discussion Timer
+### 3. Discussion Timer [COMPLETED]
 *   **Problem:** Teams often spend too much time discussing a single story.
 *   **Improvement:** Implement a simple countdown timer that can be started by any participant.
 *   **Impact:** Helps keep meetings on schedule.
+*   **Implementation:** Added `timer` state to room on server. Clients can send `start-timer` and `stop-timer` messages. Real-time synchronization of `endTime`. `Timer` component in UI displays countdown and allows any participant to control it.
 
 ### 4. Estimation History
 *   **Problem:** Teams lose track of what they estimated earlier in the session.

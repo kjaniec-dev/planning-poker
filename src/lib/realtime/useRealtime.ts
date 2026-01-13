@@ -24,6 +24,10 @@ export function useRealtime(roomId: string, userName: string) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [revealed, setRevealed] = useState(false);
   const [autoReveal, setAutoReveal] = useState(false);
+  const [timer, setTimer] = useState<{
+    endTime: number | null;
+    duration: number;
+  } | null>(null);
   const [story, setStory] = useState<Story>(null);
   const [lastRound, setLastRound] = useState<LastRound | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -46,12 +50,17 @@ export function useRealtime(roomId: string, userName: string) {
           setParticipants(data.participants);
           setRevealed(data.revealed);
           setAutoReveal(data.autoReveal ?? false);
+          setTimer(data.timer ?? null);
           setStory(data.story ?? null);
           setLastRound(data.lastRound ?? null);
           break;
 
         case "auto-reveal-updated":
           setAutoReveal(data.autoReveal);
+          break;
+
+        case "timer-updated":
+          setTimer(data.timer);
           break;
 
         case "participant-voted":
@@ -132,11 +141,20 @@ export function useRealtime(roomId: string, userName: string) {
     send("toggle-auto-reveal", { roomId, autoReveal: enabled });
   };
 
+  const startTimer = (duration: number) => {
+    send("start-timer", { roomId, duration });
+  };
+
+  const stopTimer = () => {
+    send("stop-timer", { roomId });
+  };
+
   return {
     participants,
     reestimate,
     revealed,
     autoReveal,
+    timer,
     story,
     vote,
     reveal,
@@ -148,5 +166,7 @@ export function useRealtime(roomId: string, userName: string) {
     isConnected,
     updateName,
     toggleAutoReveal,
+    startTimer,
+    stopTimer,
   };
 }

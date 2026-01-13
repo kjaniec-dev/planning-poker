@@ -7,6 +7,7 @@ import { ConfirmDialog } from "@/app/components/confirm-dialog";
 import { Participants } from "@/app/components/participants";
 import { Results } from "@/app/components/results";
 import { StoryInfo } from "@/app/components/story-info";
+import { Timer } from "@/app/components/timer";
 import { VotingCards } from "@/app/components/voting-cards";
 import { Button } from "@/components/ui/button";
 import {
@@ -73,6 +74,9 @@ export default function GameRoomPage() {
     updateName,
     autoReveal,
     toggleAutoReveal,
+    timer,
+    startTimer,
+    stopTimer,
   } = useRealtime(room, currentName);
 
   if (!mounted) return null;
@@ -193,6 +197,11 @@ export default function GameRoomPage() {
                     </CardDescription>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Timer
+                      timer={timer}
+                      onStart={startTimer}
+                      onStop={stopTimer}
+                    />
                     <Button
                       variant="outline"
                       size="sm"
