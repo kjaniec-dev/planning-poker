@@ -31,17 +31,26 @@ type Story struct {
 	Link  string `json:"link"`
 }
 
-type LastRound struct {
+type HistoryRound struct {
 	ID           string        `json:"id"`
+	Story        *Story        `json:"story"`
 	Participants []Participant `json:"participants"`
+	RevealedAt   int64         `json:"revealedAt"`
+}
+
+type Timer struct {
+	EndTime  *int64 `json:"endTime"`
+	Duration int    `json:"duration"`
 }
 
 type RoomState struct {
 	ID           string
 	Participants map[string]*Participant
 	Revealed     bool
-	LastRound    *LastRound
+	AutoReveal   bool
+	Timer        *Timer
 	Story        *Story
+	History      []HistoryRound
 	mu           sync.RWMutex
 }
 
@@ -121,8 +130,10 @@ func (s *Server) getOrCreateRoom(roomID string) *RoomState {
 		ID:           roomID,
 		Participants: make(map[string]*Participant),
 		Revealed:     false,
+		AutoReveal:   false,
+		Timer:        nil,
 		Story:        nil,
-		LastRound:    nil,
+		History:      []HistoryRound{},
 	}
 	s.rooms[roomID] = room
 	return room
@@ -402,6 +413,29 @@ func (s *Server) handleVote(ws *ExtendedWebSocket, data map[string]interface{}) 
 			return
 		}
 		participant.Vote = &vote
+
+		if room.AutoReveal && !room.Revealed && vote != "" {
+			activeParticipantsCount := 0
+			votedCount := 0
+
+			s.clientsMu.RLock()
+			for _, p := range room.Participants {
+				if !p.Paused && s.clients[p.ID] != nil {
+					activeParticipantsCount++
+					if p.Vote != nil && *p.Vote != "" {
+						votedCount++
+					}
+				}
+			}
+			s.clientsMu.RUnlock()
+
+			if activeParticipantsCount > 0 && votedCount == activeParticipantsCount {
+				log.Printf("🚀 Auto-revealing room: %s", roomID)
+				room.mu.Unlock()
+				s.handleReveal(ws, map[string]interface{}{"roomId": roomID})
+				return
+			}
+		}
 	}
 	room.mu.Unlock()
 
@@ -424,19 +458,22 @@ func (s *Server) handleReveal(ws *ExtendedWebSocket, data map[string]interface{}
 	room.mu.Lock()
 	room.Revealed = true
 
-	roundID := time.Now().UnixMilli()
+	roundID := strconv.FormatInt(time.Now().UnixMilli(), 10)
 	participants := s.getParticipantsArray(room)
-	room.LastRound = &LastRound{
-		ID:           string(rune(roundID)),
+	round := HistoryRound{
+		ID:           roundID,
+		Story:        room.Story,
 		Participants: participants,
+		RevealedAt:   time.Now().UnixMilli(),
 	}
 
-	lastRound := room.LastRound
+	room.History = append(room.History, round)
+	history := room.History
 	room.mu.Unlock()
 
 	revealedData := map[string]interface{}{
 		"participants": participants,
-		"lastRound":    lastRound,
+		"history":      history,
 	}
 	s.broadcastToRoom(roomID, "revealed", revealedData)
 }
@@ -477,7 +514,7 @@ func (s *Server) handleReset(ws *ExtendedWebSocket, data map[string]interface{})
 	for _, p := range room.Participants {
 		p.Vote = nil
 	}
-	room.LastRound = nil
+	room.History = []HistoryRound{}
 	room.Story = nil
 	participants := s.getParticipantsArray(room)
 	room.mu.Unlock()
@@ -485,6 +522,7 @@ func (s *Server) handleReset(ws *ExtendedWebSocket, data map[string]interface{})
 	roomReset := map[string]interface{}{
 		"participants": participants,
 		"story":        nil,
+		"history":      []HistoryRound{},
 	}
 	s.broadcastToRoom(roomID, "room-reset", roomReset)
 }
@@ -637,6 +675,71 @@ func (s *Server) handleUpdateName(ws *ExtendedWebSocket, data map[string]interfa
 	s.broadcastRoomState(roomID)
 }
 
+func (s *Server) handleToggleAutoReveal(ws *ExtendedWebSocket, data map[string]interface{}) {
+	roomID, _ := data["roomId"].(string)
+	autoReveal, _ := data["autoReveal"].(bool)
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	room.mu.Lock()
+	room.AutoReveal = autoReveal
+	room.mu.Unlock()
+
+	log.Printf("📥 toggle-auto-reveal received: roomId=%s, autoReveal=%v", roomID, autoReveal)
+	s.broadcastToRoom(roomID, "auto-reveal-updated", map[string]interface{}{"autoReveal": autoReveal})
+}
+
+func (s *Server) handleStartTimer(ws *ExtendedWebSocket, data map[string]interface{}) {
+	roomID, _ := data["roomId"].(string)
+	durationFloat, _ := data["duration"].(float64)
+	duration := int(durationFloat)
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	endTime := time.Now().UnixMilli() + int64(duration*1000)
+	room.mu.Lock()
+	room.Timer = &Timer{
+		EndTime:  &endTime,
+		Duration: duration,
+	}
+	timer := room.Timer
+	room.mu.Unlock()
+
+	log.Printf("📥 start-timer received: roomId=%s, duration=%d, endTime=%d", roomID, duration, endTime)
+	s.broadcastToRoom(roomID, "timer-updated", map[string]interface{}{"timer": timer})
+}
+
+func (s *Server) handleStopTimer(ws *ExtendedWebSocket, data map[string]interface{}) {
+	roomID, _ := data["roomId"].(string)
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	room.mu.Lock()
+	room.Timer = nil
+	room.mu.Unlock()
+
+	log.Printf("📥 stop-timer received: roomId=%s", roomID)
+	s.broadcastToRoom(roomID, "timer-updated", map[string]interface{}{"timer": nil})
+}
+
 func (s *Server) handleMessage(ws *ExtendedWebSocket, message WebSocketMessage) {
 	switch message.Type {
 	case "join-room":
@@ -675,6 +778,18 @@ func (s *Server) handleMessage(ws *ExtendedWebSocket, message WebSocketMessage) 
 		if data, ok := message.Data.(map[string]interface{}); ok {
 			s.handleResumeVoting(ws, data)
 		}
+	case "toggle-auto-reveal":
+		if data, ok := message.Data.(map[string]interface{}); ok {
+			s.handleToggleAutoReveal(ws, data)
+		}
+	case "start-timer":
+		if data, ok := message.Data.(map[string]interface{}); ok {
+			s.handleStartTimer(ws, data)
+		}
+	case "stop-timer":
+		if data, ok := message.Data.(map[string]interface{}); ok {
+			s.handleStopTimer(ws, data)
+		}
 	default:
 		log.Printf("Unknown message type: %s", message.Type)
 	}
@@ -695,8 +810,10 @@ func (s *Server) broadcastRoomState(roomID string) {
 	roomState := map[string]interface{}{
 		"participants": s.getParticipantsArray(room),
 		"revealed":     room.Revealed,
+		"autoReveal":   room.AutoReveal,
+		"timer":        room.Timer,
 		"story":        room.Story,
-		"lastRound":    room.LastRound,
+		"history":      room.History,
 	}
 	s.broadcastToRoom(roomID, "room-state", roomState)
 }
