@@ -4,10 +4,11 @@ This document outlines proposed UX and UI improvements to enhance the user exper
 
 ## UX (User Experience) Improvements
 
-### 1. Persistent Identity
+### 1. Persistent Identity [COMPLETED]
 *   **Problem:** Users have to enter their name every time they join or create a room.
-*   **Improvement:** Store the user's name in `localStorage` after the first entry.
-*   **Impact:** Reduces friction for returning users.
+*   **Improvement:** Store the user's name in `localStorage` after the first entry. Sync name between URL and `localStorage`.
+*   **Impact:** Reduces friction for returning users and ensures consistent identity across sessions.
+*   **Implementation:** Handled in `LandingPage` and `GameRoomPage`. Automatically retrieves saved name and updates URL if missing.
 
 ### 2. Auto-Reveal Strategy
 *   **Problem:** Manually revealing cards can be a bottleneck.
