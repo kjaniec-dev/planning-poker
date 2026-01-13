@@ -22,6 +22,10 @@ export default function LandingPage() {
 
   useEffect(() => {
     setMounted(true);
+    const savedName = localStorage.getItem("planning-poker-user-name");
+    if (savedName) {
+      setName(savedName);
+    }
   }, []);
 
   if (!mounted) return null;
@@ -38,6 +42,7 @@ export default function LandingPage() {
   const handleSubmit = (isCreating: boolean) => {
     if (!name || (!isCreating && !roomCode)) return;
 
+    localStorage.setItem("planning-poker-user-name", name.trim());
     const room = (isCreating ? generateRoomCode() : roomCode).toUpperCase();
     const qp = new URLSearchParams();
     qp.set("name", name);

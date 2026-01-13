@@ -25,11 +25,38 @@ export default function GameRoomPage() {
   const _router = useRouter();
 
   const room = (params?.room || "").toString().toUpperCase();
-  const initialName = search?.get("name")?.toString() || "Guest";
+  const initialNameFromUrl = search?.get("name")?.toString();
+
+  const [currentName, setCurrentName] = useState("");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+    if (initialNameFromUrl) {
+      setCurrentName(initialNameFromUrl.trim());
+      localStorage.setItem("planning-poker-user-name", initialNameFromUrl.trim());
+    } else {
+      const savedName = localStorage.getItem("planning-poker-user-name");
+      if (savedName) {
+        setCurrentName(savedName);
+        // Sync URL with saved name for consistency if joined without name
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has("name")) {
+          url.searchParams.set("name", savedName);
+          window.history.replaceState(
+            { ...window.history.state, as: url.href, url: url.href },
+            "",
+            url.href,
+          );
+        }
+      } else {
+        setCurrentName("Guest");
+      }
+    }
+  }, [initialNameFromUrl]);
 
   const [selection, setSelection] = useState<string | null>(null);
   const wasRevealed = useRef(false);
-  const [currentName, setCurrentName] = useState(initialName.trim());
   const [newName, setNewName] = useState("");
   const {
     participants,
@@ -45,6 +72,8 @@ export default function GameRoomPage() {
     suspendVoting,
     updateName,
   } = useRealtime(room, currentName);
+
+  if (!mounted) return null;
 
   const me = participants.find((p) => p.name === currentName);
   const isSpectator = currentName === "Guest";
@@ -102,6 +131,7 @@ export default function GameRoomPage() {
   const handleBecomeParticipant = () => {
     if (!newName) return;
     const trimmedName = newName.trim();
+    localStorage.setItem("planning-poker-user-name", trimmedName);
     updateName(trimmedName);
     setCurrentName(trimmedName);
 
