@@ -55,6 +55,7 @@ export type RoomState = {
     }
   >;
   revealed: boolean;
+  autoReveal: boolean;
   lastRound?: {
     id: string;
     participants: Array<{ id: string; name: string; vote: string | null }>;
@@ -82,6 +83,7 @@ export function getOrCreateRoom(roomId: string): RoomState {
       id: roomId,
       participants: new Map(),
       revealed: false,
+      autoReveal: false,
       story: null,
       lastRound: null,
     });
@@ -284,6 +286,9 @@ function handleMessage(ws: ExtendedWebSocket, message: WSMessage) {
     case "update-name":
       handleUpdateName(ws, data as { roomId: string; name: string });
       break;
+    case "toggle-auto-reveal":
+      handleToggleAutoReveal(ws, data as { roomId: string; autoReveal: boolean });
+      break;
     default:
       console.warn("Unknown message type:", type);
   }
@@ -410,6 +415,7 @@ function handleJoinRoom(
   const roomState = {
     participants: Array.from(room.participants.values()),
     revealed: room.revealed,
+    autoReveal: room.autoReveal,
     story: room.story ?? null,
     lastRound: room.lastRound ?? null,
   };
@@ -448,6 +454,17 @@ function handleVote(
 
     participant.vote = vote;
     emitToRoom(roomId, "participant-voted", { id: ws.id, hasVote: !!vote });
+
+    if (room.autoReveal && !room.revealed && vote) {
+      const activeParticipants = Array.from(room.participants.values()).filter(
+        (p) => !p.paused && clients.has(p.id),
+      );
+      const allVoted = activeParticipants.every((p) => p.vote);
+      if (allVoted && activeParticipants.length > 0) {
+        console.log("🚀 Auto-revealing room:", roomId);
+        handleReveal(ws, { roomId });
+      }
+    }
   }
 }
 
@@ -483,6 +500,7 @@ function handleReestimate(_ws: ExtendedWebSocket, data: { roomId: string }) {
   emitToRoom(roomId, "room-state", {
     participants: Array.from(room.participants.values()),
     revealed: room.revealed,
+    autoReveal: room.autoReveal,
     story: room.story ?? null,
     lastRound: room.lastRound ?? null,
   });
@@ -530,6 +548,7 @@ function handleSuspendVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
       emitToRoom(roomId, "room-state", {
         participants: Array.from(room.participants.values()),
         revealed: room.revealed,
+        autoReveal: room.autoReveal,
         story: room.story ?? null,
         lastRound: room.lastRound ?? null,
       });
@@ -547,6 +566,7 @@ function handleResumeVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
       emitToRoom(roomId, "room-state", {
         participants: Array.from(room.participants.values()),
         revealed: room.revealed,
+        autoReveal: room.autoReveal,
         story: room.story ?? null,
         lastRound: room.lastRound ?? null,
       });
@@ -632,12 +652,26 @@ function handleUpdateName(
   const roomState = {
     participants: Array.from(room.participants.values()),
     revealed: room.revealed,
+    autoReveal: room.autoReveal,
     story: room.story ?? null,
     lastRound: room.lastRound ?? null,
   };
 
   console.log("📤 Broadcasting updated room-state to room %s", roomId);
   emitToRoom(roomId, "room-state", roomState);
+}
+
+function handleToggleAutoReveal(
+  _ws: ExtendedWebSocket,
+  data: { roomId: string; autoReveal: boolean },
+) {
+  const { roomId, autoReveal } = data;
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  room.autoReveal = autoReveal;
+  console.log("📥 toggle-auto-reveal received:", { roomId, autoReveal });
+  emitToRoom(roomId, "auto-reveal-updated", { autoReveal });
 }
 
 export async function shutdown(): Promise<void> {

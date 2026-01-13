@@ -10,10 +10,11 @@ This document outlines proposed UX and UI improvements to enhance the user exper
 *   **Impact:** Reduces friction for returning users and ensures consistent identity across sessions.
 *   **Implementation:** Handled in `LandingPage` and `GameRoomPage`. Automatically retrieves saved name and updates URL if missing.
 
-### 2. Auto-Reveal Strategy
+### 2. Auto-Reveal Strategy [COMPLETED]
 *   **Problem:** Manually revealing cards can be a bottleneck.
 *   **Improvement:** Add a room setting to "Auto-reveal when everyone has voted".
 *   **Impact:** Speeds up the estimation process.
+*   **Implementation:** Added `autoReveal` to room state on server. New `toggle-auto-reveal` message. Logic in `handleVote` to trigger reveal when all active participants have voted if `autoReveal` is enabled. UI toggle added to `GameRoomPage`.
 
 ### 3. Discussion Timer
 *   **Problem:** Teams often spend too much time discussing a single story.

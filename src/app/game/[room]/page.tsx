@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban } from "lucide-react";
+import { Ban, Eye, EyeOff } from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/app/components/confirm-dialog";
@@ -71,6 +71,8 @@ export default function GameRoomPage() {
     resumeVoting,
     suspendVoting,
     updateName,
+    autoReveal,
+    toggleAutoReveal,
   } = useRealtime(room, currentName);
 
   if (!mounted) return null;
@@ -192,7 +194,27 @@ export default function GameRoomPage() {
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                     <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleAutoReveal(!autoReveal)}
+                      title={autoReveal ? "Disable Auto-Reveal" : "Enable Auto-Reveal"}
+                      className="flex items-center gap-2"
+                    >
+                      {autoReveal ? (
+                        <>
+                          <EyeOff className="h-4 w-4" />
+                          <span className="hidden sm:inline">Auto-Reveal: On</span>
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="h-4 w-4" />
+                          <span className="hidden sm:inline">Auto-Reveal: Off</span>
+                        </>
+                      )}
+                    </Button>
+                    <Button
                       variant="default"
+                      size="sm"
                       onClick={copyGameUrl}
                       title="Copy room link"
                     >

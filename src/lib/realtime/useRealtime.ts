@@ -23,6 +23,7 @@ type LastRound = {
 export function useRealtime(roomId: string, userName: string) {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [revealed, setRevealed] = useState(false);
+  const [autoReveal, setAutoReveal] = useState(false);
   const [story, setStory] = useState<Story>(null);
   const [lastRound, setLastRound] = useState<LastRound | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -44,8 +45,13 @@ export function useRealtime(roomId: string, userName: string) {
           setIsConnected(true);
           setParticipants(data.participants);
           setRevealed(data.revealed);
+          setAutoReveal(data.autoReveal ?? false);
           setStory(data.story ?? null);
           setLastRound(data.lastRound ?? null);
+          break;
+
+        case "auto-reveal-updated":
+          setAutoReveal(data.autoReveal);
           break;
 
         case "participant-voted":
@@ -122,10 +128,15 @@ export function useRealtime(roomId: string, userName: string) {
     updateLastJoinName(newName);
   };
 
+  const toggleAutoReveal = (enabled: boolean) => {
+    send("toggle-auto-reveal", { roomId, autoReveal: enabled });
+  };
+
   return {
     participants,
     reestimate,
     revealed,
+    autoReveal,
     story,
     vote,
     reveal,
@@ -136,5 +147,6 @@ export function useRealtime(roomId: string, userName: string) {
     resumeVoting,
     isConnected,
     updateName,
+    toggleAutoReveal,
   };
 }
