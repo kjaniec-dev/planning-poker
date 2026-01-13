@@ -15,9 +15,11 @@ type Participant = {
 
 type Story = { title: string; link: string } | null;
 
-type LastRound = {
+type HistoryRound = {
   id: string;
+  story: Story | null;
   participants: Participant[];
+  revealedAt: number;
 };
 
 export function useRealtime(roomId: string, userName: string) {
@@ -29,7 +31,7 @@ export function useRealtime(roomId: string, userName: string) {
     duration: number;
   } | null>(null);
   const [story, setStory] = useState<Story>(null);
-  const [lastRound, setLastRound] = useState<LastRound | null>(null);
+  const [history, setHistory] = useState<HistoryRound[]>([]);
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
@@ -52,7 +54,7 @@ export function useRealtime(roomId: string, userName: string) {
           setAutoReveal(data.autoReveal ?? false);
           setTimer(data.timer ?? null);
           setStory(data.story ?? null);
-          setLastRound(data.lastRound ?? null);
+          setHistory(data.history ?? []);
           break;
 
         case "auto-reveal-updated":
@@ -76,14 +78,14 @@ export function useRealtime(roomId: string, userName: string) {
         case "revealed":
           setParticipants(data.participants);
           setRevealed(true);
-          setLastRound(data.lastRound ?? null);
+          setHistory(data.history ?? []);
           break;
 
         case "room-reset":
           setParticipants(data.participants);
           setRevealed(false);
           setStory(null);
-          setLastRound(null);
+          setHistory([]);
           break;
 
         case "story-updated":
@@ -158,7 +160,7 @@ export function useRealtime(roomId: string, userName: string) {
     story,
     vote,
     reveal,
-    lastRound,
+    history,
     reset,
     updateStory,
     suspendVoting,

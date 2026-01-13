@@ -60,11 +60,12 @@ export type RoomState = {
     endTime: number | null;
     duration: number;
   } | null;
-  lastRound?: {
+  history: Array<{
     id: string;
+    story: { title: string; link: string } | null;
     participants: Array<{ id: string; name: string; vote: string | null }>;
-  } | null;
-  story?: { title: string; link: string } | null;
+    revealedAt: number;
+  }>;
 };
 
 type ExtendedWebSocket = WebSocket & {
@@ -90,7 +91,7 @@ export function getOrCreateRoom(roomId: string): RoomState {
       autoReveal: false,
       timer: null,
       story: null,
-      lastRound: null,
+      history: [],
     });
   }
   const room = rooms.get(roomId);
@@ -429,7 +430,7 @@ function handleJoinRoom(
     autoReveal: room.autoReveal,
     timer: room.timer ?? null,
     story: room.story ?? null,
-    lastRound: room.lastRound ?? null,
+    history: room.history,
   };
 
   console.log("📤 Sending room-state to joining client", ws.id);
@@ -488,14 +489,18 @@ function handleReveal(_ws: ExtendedWebSocket, data: { roomId: string }) {
   room.revealed = true;
 
   const roundId = `${Date.now()}`;
-  room.lastRound = {
+  const round = {
     id: roundId,
+    story: room.story ? { ...room.story } : null,
     participants: Array.from(room.participants.values()).map((p) => ({ ...p })),
+    revealedAt: Date.now(),
   };
+
+  room.history.push(round);
 
   emitToRoom(roomId, "revealed", {
     participants: Array.from(room.participants.values()),
-    lastRound: room.lastRound,
+    history: room.history,
   });
 }
 
@@ -515,7 +520,7 @@ function handleReestimate(_ws: ExtendedWebSocket, data: { roomId: string }) {
     autoReveal: room.autoReveal,
     timer: room.timer ?? null,
     story: room.story ?? null,
-    lastRound: room.lastRound ?? null,
+    history: room.history,
   });
 }
 
@@ -529,12 +534,13 @@ function handleReset(_ws: ExtendedWebSocket, data: { roomId: string }) {
     p.vote = null;
   }
 
-  room.lastRound = null;
+  room.history = [];
   room.story = null;
 
   emitToRoom(roomId, "room-reset", {
     participants: Array.from(room.participants.values()),
     story: room.story ?? null,
+    history: room.history,
   });
 }
 
@@ -564,7 +570,7 @@ function handleSuspendVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
         autoReveal: room.autoReveal,
         timer: room.timer ?? null,
         story: room.story ?? null,
-        lastRound: room.lastRound ?? null,
+        history: room.history,
       });
     }
   }
@@ -583,7 +589,7 @@ function handleResumeVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
         autoReveal: room.autoReveal,
         timer: room.timer ?? null,
         story: room.story ?? null,
-        lastRound: room.lastRound ?? null,
+        history: room.history,
       });
     }
   }
@@ -670,7 +676,7 @@ function handleUpdateName(
     autoReveal: room.autoReveal,
     timer: room.timer ?? null,
     story: room.story ?? null,
-    lastRound: room.lastRound ?? null,
+    history: room.history,
   };
 
   console.log("📤 Broadcasting updated room-state to room %s", roomId);

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/app/components/confirm-dialog";
 import { Participants } from "@/app/components/participants";
 import { Results } from "@/app/components/results";
+import { SessionHistory } from "@/app/components/session-history";
 import { StoryInfo } from "@/app/components/story-info";
 import { Timer } from "@/app/components/timer";
 import { VotingCards } from "@/app/components/voting-cards";
@@ -67,7 +68,7 @@ export default function GameRoomPage() {
     reset,
     story,
     updateStory,
-    lastRound,
+    history,
     reestimate,
     resumeVoting,
     suspendVoting,
@@ -296,8 +297,10 @@ export default function GameRoomPage() {
               revealed={revealed}
               onReveal={handleReveal}
               canReveal={!!selection}
-              previousRound={lastRound ?? undefined}
+              previousRound={history[history.length - 1] ?? undefined}
             />
+
+            <SessionHistory history={history} />
           </div>
         </div>
       </main>

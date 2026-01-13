@@ -22,10 +22,11 @@ This document outlines proposed UX and UI improvements to enhance the user exper
 *   **Impact:** Helps keep meetings on schedule.
 *   **Implementation:** Added `timer` state to room on server. Clients can send `start-timer` and `stop-timer` messages. Real-time synchronization of `endTime`. `Timer` component in UI displays countdown and allows any participant to control it.
 
-### 4. Estimation History
+### 4. Estimation History [COMPLETED]
 *   **Problem:** Teams lose track of what they estimated earlier in the session.
 *   **Improvement:** Add a "Session History" sidebar showing the story title and final estimate for previous rounds.
 *   **Impact:** Provides valuable context for current estimations.
+*   **Implementation:** Replaced `lastRound` with a `history` array in room state on server. New rounds are pushed to history on reveal. `SessionHistory` component in UI displays all previous rounds with story titles and average votes. Updated `Results` to show the most recent historical round when re-estimating.
 
 ---
 

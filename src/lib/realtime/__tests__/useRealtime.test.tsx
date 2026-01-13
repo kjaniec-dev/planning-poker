@@ -77,7 +77,7 @@ describe("useRealtime", () => {
               ],
               revealed: false,
               story: null,
-              lastRound: null,
+              history: [],
             },
           }),
         );
@@ -107,7 +107,7 @@ describe("useRealtime", () => {
               participants: [{ id: "1", name: "Alice", vote: null }],
               revealed: false,
               story: null,
-              lastRound: null,
+              history: [],
             },
           }),
         );
@@ -146,13 +146,17 @@ describe("useRealtime", () => {
           { id: "1", name: "Alice", vote: "5" },
           { id: "2", name: "Bob", vote: "8" },
         ],
-        lastRound: {
-          id: "123",
-          participants: [
-            { id: "1", name: "Alice", vote: "5" },
-            { id: "2", name: "Bob", vote: "8" },
-          ],
-        },
+        history: [
+          {
+            id: "123",
+            story: null,
+            participants: [
+              { id: "1", name: "Alice", vote: "5" },
+              { id: "2", name: "Bob", vote: "8" },
+            ],
+            revealedAt: Date.now(),
+          },
+        ],
       };
 
       act(() => {
@@ -167,7 +171,7 @@ describe("useRealtime", () => {
       await waitFor(() => {
         expect(result.current.revealed).toBe(true);
         expect(result.current.participants).toHaveLength(2);
-        expect(result.current.lastRound).toBeDefined();
+        expect(result.current.history).toHaveLength(1);
       });
     });
 
@@ -189,7 +193,7 @@ describe("useRealtime", () => {
               participants: [{ id: "1", name: "Alice", vote: "5" }],
               revealed: true,
               story: { title: "Test", link: "http://test.com" },
-              lastRound: { id: "123", participants: [] },
+              history: [{ id: "123", participants: [], revealedAt: Date.now(), story: null }],
             },
           }),
         );
@@ -207,6 +211,7 @@ describe("useRealtime", () => {
             data: {
               participants: [{ id: "1", name: "Alice", vote: null }],
               story: null,
+              history: [],
             },
           }),
         );
@@ -215,7 +220,7 @@ describe("useRealtime", () => {
       await waitFor(() => {
         expect(result.current.revealed).toBe(false);
         expect(result.current.story).toBeNull();
-        expect(result.current.lastRound).toBeNull();
+        expect(result.current.history).toHaveLength(0);
       });
     });
 

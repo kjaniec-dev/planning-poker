@@ -27,6 +27,7 @@ type Props = {
   onReestimate?: () => void;
   previousRound?: {
     id: string;
+    story: { title: string; link: string } | null;
     participants: Array<{ id: string; name: string; vote: string | null }>;
   } | null;
 };
