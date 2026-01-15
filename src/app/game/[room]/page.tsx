@@ -265,28 +265,28 @@ export default function GameRoomPage() {
                       className="flex items-center gap-2"
                     >
                       <LayoutDashboard className="h-4 w-4" />
-                      <span>Voting</span>
+                      <span className="hidden sm:inline">Voting</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value="results"
                       className="flex items-center gap-2"
                     >
                       <CheckCircle className="h-4 w-4" />
-                      <span>Results</span>
+                      <span className="hidden sm:inline">Results</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value="history"
                       className="flex items-center gap-2"
                     >
                       <History className="h-4 w-4" />
-                      <span>History</span>
+                      <span className="hidden sm:inline">History</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value="settings"
                       className="flex items-center gap-2"
                     >
                       <Settings className="h-4 w-4" />
-                      <span>Settings</span>
+                      <span className="hidden sm:inline">Settings</span>
                     </TabsTrigger>
                   </TabsList>
 
@@ -349,7 +349,7 @@ export default function GameRoomPage() {
                   <TabsContent value="settings" className="mt-0 outline-none">
                     <div className="space-y-6 py-4">
                       <div className="flex flex-col gap-4">
-                        <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                        <div className="flex flex-col gap-4 p-4 rounded-lg border bg-muted/30">
                           <div className="space-y-0.5">
                             <h4 className="text-sm font-medium">Auto-Reveal</h4>
                             <p className="text-sm text-muted-foreground">
@@ -360,7 +360,7 @@ export default function GameRoomPage() {
                             variant={autoReveal ? "default" : "outline"}
                             size="sm"
                             onClick={() => toggleAutoReveal(!autoReveal)}
-                            className="flex items-center gap-2 min-w-[120px]"
+                            className="flex items-center gap-2 w-full sm:w-auto sm:self-start min-w-[120px]"
                           >
                             {autoReveal ? (
                               <>
@@ -376,10 +376,10 @@ export default function GameRoomPage() {
                           </Button>
                         </div>
 
-                        <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                        <div className="flex flex-col gap-4 p-4 rounded-lg border bg-muted/30">
                           <div className="space-y-0.5">
                             <h4 className="text-sm font-medium">Room Link</h4>
-                            <p className="text-sm text-muted-foreground truncate max-w-[200px] sm:max-w-xs">
+                            <p className="text-sm text-muted-foreground truncate max-w-full">
                               {typeof window !== "undefined"
                                 ? `${location.origin}/game/${room}`
                                 : ""}
@@ -389,14 +389,14 @@ export default function GameRoomPage() {
                             variant="outline"
                             size="sm"
                             onClick={copyGameUrl}
-                            className="flex items-center gap-2"
+                            className="flex items-center gap-2 w-full sm:w-auto sm:self-start"
                           >
                             <Link className="h-4 w-4" />
                             <span>Copy URL</span>
                           </Button>
                         </div>
 
-                        <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                        <div className="flex flex-col gap-4 p-4 rounded-lg border bg-muted/30">
                           <div className="space-y-0.5">
                             <h4 className="text-sm font-medium text-destructive">
                               Danger Zone
@@ -410,7 +410,7 @@ export default function GameRoomPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive hover:text-white"
+                                className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive hover:text-white w-full sm:w-auto sm:self-start"
                               >
                                 <RotateCcw className="h-4 w-4" />
                                 <span>Reset Game</span>
