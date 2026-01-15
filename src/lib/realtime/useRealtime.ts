@@ -42,32 +42,37 @@ export function useRealtime(roomId: string, userName: string) {
     joinRoom(roomId, userName);
 
     const unsubscribe = subscribeToMessages((message) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { type, data } = message as { type: string; data: any };
+      const { type, data } = message as {
+        type: string;
+        data: Record<string, unknown>;
+      };
 
       switch (type) {
         case "room-state":
           setIsConnected(true);
-          setParticipants(data.participants);
-          setRevealed(data.revealed);
-          setAutoReveal(data.autoReveal ?? false);
-          setTimer(data.timer ?? null);
-          setStory(data.story ?? null);
-          setHistory(data.history ?? []);
+          setParticipants(data.participants as Participant[]);
+          setRevealed(data.revealed as boolean);
+          setAutoReveal((data.autoReveal as boolean) ?? false);
+          setTimer(
+            (data.timer as { endTime: number | null; duration: number }) ??
+              null,
+          );
+          setStory((data.story as Story) ?? null);
+          setHistory((data.history as HistoryRound[]) ?? []);
           break;
 
         case "auto-reveal-updated":
-          setAutoReveal(data.autoReveal);
+          setAutoReveal(data.autoReveal as boolean);
           break;
 
         case "timer-updated":
-          setTimer(data.timer);
+          setTimer(data.timer as { endTime: number | null; duration: number });
           break;
 
         case "participant-voted":
           setParticipants((prev) =>
             prev.map((p) =>
-              p.id === data.id
+              p.id === (data.id as string)
                 ? { ...p, vote: data.hasVote ? "hidden" : null }
                 : p,
             ),
@@ -75,20 +80,20 @@ export function useRealtime(roomId: string, userName: string) {
           break;
 
         case "revealed":
-          setParticipants(data.participants);
+          setParticipants(data.participants as Participant[]);
           setRevealed(true);
-          setHistory(data.history ?? []);
+          setHistory((data.history as HistoryRound[]) ?? []);
           break;
 
         case "room-reset":
-          setParticipants(data.participants);
+          setParticipants(data.participants as Participant[]);
           setRevealed(false);
           setStory(null);
           setHistory([]);
           break;
 
         case "story-updated":
-          setStory(data.story ?? null);
+          setStory((data.story as Story) ?? null);
           break;
 
         default:

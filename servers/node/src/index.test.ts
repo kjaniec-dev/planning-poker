@@ -7,8 +7,7 @@ type ServerMessage = {
   data: unknown;
 };
 
-// Helper to safely access message data with type assertion
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Helper to safely access message data with type assertion in tests
 const getData = (msg: ServerMessage) => msg.data as any;
 
 describe("WebSocket Server", () => {

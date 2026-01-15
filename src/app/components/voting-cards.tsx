@@ -115,10 +115,10 @@ export function VotingCards({
                 className={`w-full h-24 text-xl relative preserve-3d transition-all duration-300 shadow-sm hover:shadow-md ${
                   isPaused ? "cursor-not-allowed opacity-60" : ""
                 } ${
-                  revealed && isSelected ? "ring-2 ring-primary ring-offset-2" : ""
-                } ${
-                  revealed && !isSelected ? "opacity-40" : ""
-                }
+                  revealed && isSelected
+                    ? "ring-2 ring-primary ring-offset-2"
+                    : ""
+                } ${revealed && !isSelected ? "opacity-40" : ""}
                 rounded-xl border-2
                 ${
                   isSelected

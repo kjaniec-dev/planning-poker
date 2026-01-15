@@ -2,13 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { Ban, Check, Loader, Pause } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Participant = {
   id: string;

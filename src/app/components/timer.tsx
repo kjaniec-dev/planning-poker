@@ -36,7 +36,7 @@ export function Timer({ timer, onStart, onStop }: TimerProps) {
     const updateTimer = () => {
       const remaining = Math.max(
         0,
-        Math.ceil((timer.endTime! - Date.now()) / 1000),
+        Math.ceil(((timer.endTime ?? 0) - Date.now()) / 1000),
       );
       setTimeLeft(remaining);
 
