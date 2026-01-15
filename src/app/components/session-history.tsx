@@ -33,7 +33,8 @@ export function SessionHistory({ history }: Props) {
           }
           return acc;
         }, []);
-        const avg = numericVotes.length > 0 ? calculateAverage(numericVotes) : null;
+        const avg =
+          numericVotes.length > 0 ? calculateAverage(numericVotes) : null;
 
         return (
           <div key={round.id} className="border-b pb-4 last:border-0 last:pb-0">

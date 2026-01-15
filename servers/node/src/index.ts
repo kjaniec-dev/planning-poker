@@ -294,7 +294,10 @@ function handleMessage(ws: ExtendedWebSocket, message: WSMessage) {
       handleUpdateName(ws, data as { roomId: string; name: string });
       break;
     case "toggle-auto-reveal":
-      handleToggleAutoReveal(ws, data as { roomId: string; autoReveal: boolean });
+      handleToggleAutoReveal(
+        ws,
+        data as { roomId: string; autoReveal: boolean },
+      );
       break;
     case "start-timer":
       handleStartTimer(ws, data as { roomId: string; duration: number });

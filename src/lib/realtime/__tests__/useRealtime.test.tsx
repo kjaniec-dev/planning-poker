@@ -186,7 +186,14 @@ describe("useRealtime", () => {
               participants: [{ id: "1", name: "Alice", vote: "5" }],
               revealed: true,
               story: { title: "Test", link: "http://test.com" },
-              history: [{ id: "123", participants: [], revealedAt: Date.now(), story: null }],
+              history: [
+                {
+                  id: "123",
+                  participants: [],
+                  revealedAt: Date.now(),
+                  story: null,
+                },
+              ],
             },
           }),
         );

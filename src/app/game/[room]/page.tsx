@@ -53,7 +53,10 @@ export default function GameRoomPage() {
     setMounted(true);
     if (initialNameFromUrl) {
       setCurrentName(initialNameFromUrl.trim());
-      localStorage.setItem("planning-poker-user-name", initialNameFromUrl.trim());
+      localStorage.setItem(
+        "planning-poker-user-name",
+        initialNameFromUrl.trim(),
+      );
     } else {
       const savedName = localStorage.getItem("planning-poker-user-name");
       if (savedName) {

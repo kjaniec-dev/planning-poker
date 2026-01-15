@@ -32,21 +32,25 @@ This document outlines proposed UX and UI improvements to enhance the user exper
 
 ## UI (User Interface) Improvements
 
-### 1. Interactive Card Animations
+### 1. Interactive Card Animations [COMPLETED]
 *   **Improvement:** Use 3D flip animations when cards are revealed. Add "wiggle" animations when a user changes their vote.
 *   **Impact:** Makes the interface feel more dynamic and "game-like".
+*   **Implementation:** Added `framer-motion`. Implemented 3D flip using `AnimatePresence` and `rotateY` in `VotingCards`. Added wiggle animation on selection change. Refined card design with gradients and better borders.
 
-### 2. Dynamic Avatars
+### 2. Dynamic Avatars [COMPLETED]
 *   **Improvement:** Before text names in the participant list add circular avatars containing initials. Like the greyscale so keep it rather greyscale. Be careful of theme colors
 *   **Impact:** Improves visual recognition of team members at a glance.
+*   **Implementation:** Added `getInitials` helper and avatar circle in `Participants` component.
 
-### 3. Visual Progress Tracking
+### 3. Visual Progress Tracking [COMPLETED]
 *   **Improvement:** Replace the "3/5 ready" text with a circular or linear progress bar. Not replace maybe keep it both?
 *   **Impact:** Provides a more intuitive sense of how close the group is to revealing.
+*   **Implementation:** Added a linear progress bar with `framer-motion` animation in `Participants` header.
 
-### 4. Refined Card Design
+### 4. Refined Card Design [COMPLETED]
 *   **Improvement:** Give voting cards a more "tactile" feel with subtle gradients, border-radius, and depth shadows. Add a "raised" state on hover.
 *   **Impact:** Enhances the premium feel of the application.
+*   **Implementation:** Integrated into `VotingCards` using Tailwind gradients, shadows, and `framer-motion` for interaction.
 
 ### 5. Haptic Feedback (Mobile)
 *   **Improvement:** Trigger a short vibration when a user taps a card on mobile devices.
