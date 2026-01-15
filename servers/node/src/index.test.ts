@@ -69,7 +69,7 @@ describe("WebSocket Server", () => {
       expect(room.revealed).toBe(false);
       expect(room.participants.size).toBe(0);
       expect(room.story).toBeNull();
-      expect(room.lastRound).toBeNull();
+      expect(room.history).toHaveLength(0);
     });
 
     test("should return the same room instance", () => {
@@ -296,8 +296,8 @@ describe("WebSocket Server", () => {
       expect(message.type).toBe("revealed");
       expect(getData(message).participants).toHaveLength(1);
       expect(getData(message).participants[0].vote).toBe("5");
-      expect(getData(message).lastRound).toBeDefined();
-      expect(getData(message).lastRound.participants).toHaveLength(1);
+      expect(getData(message).history).toBeDefined();
+      expect(getData(message).history).toHaveLength(1);
 
       ws.close();
     });
@@ -367,7 +367,7 @@ describe("WebSocket Server", () => {
       ws.close();
     });
 
-    test("should clear lastRound when resetting after reveal", async () => {
+    test("should clear history when resetting after reveal", async () => {
       const ws = await createWSConnection();
       const roomId = "test-room";
 
@@ -381,16 +381,16 @@ describe("WebSocket Server", () => {
       sendMessage(ws, "reveal", { roomId });
       const revealMessage = await waitForMessage(ws);
       expect(revealMessage.type).toBe("revealed");
-      expect(getData(revealMessage).lastRound).toBeDefined();
+      expect(getData(revealMessage).history).toBeDefined();
 
-      // Reset should clear lastRound
+      // Reset should clear history
       sendMessage(ws, "reset", { roomId });
       const resetMessage = await waitForMessage(ws);
       expect(resetMessage.type).toBe("room-reset");
 
-      // Verify lastRound is cleared in server state
+      // Verify history is cleared in server state
       const room = getOrCreateRoom(roomId);
-      expect(room.lastRound).toBeNull();
+      expect(room.history).toHaveLength(0);
 
       ws.close();
     });

@@ -96,8 +96,8 @@ func TestGetOrCreateRoom(t *testing.T) {
 	if room1.Story != nil {
 		t.Error("New room should have no story")
 	}
-	if room1.LastRound != nil {
-		t.Error("New room should have no last round")
+	if len(room1.History) != 0 {
+		t.Error("New room should have no history")
 	}
 }
 
@@ -408,11 +408,11 @@ func TestHandleReveal(t *testing.T) {
 	if !room.Revealed {
 		t.Error("Room should be revealed")
 	}
-	if room.LastRound == nil {
-		t.Error("LastRound should be set after reveal")
+	if len(room.History) == 0 {
+		t.Error("History should be set after reveal")
 	}
-	if len(room.LastRound.Participants) != 1 {
-		t.Errorf("Expected 1 participant in last round, got %d", len(room.LastRound.Participants))
+	if len(room.History[len(room.History)-1].Participants) != 1 {
+		t.Errorf("Expected 1 participant in last round of history, got %d", len(room.History[len(room.History)-1].Participants))
 	}
 }
 

@@ -44,15 +44,8 @@ describe("useRealtime", () => {
     });
 
     it("should not join if roomId or userName is missing", () => {
-      const consoleSpy = jest.spyOn(console, "error").mockImplementation();
-
       renderHook(() => useRealtime("", "Alice"));
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Missing roomId or userName"),
-        expect.any(Object),
-      );
-
-      consoleSpy.mockRestore();
+      expect(mockServer.clients()).toHaveLength(0);
     });
   });
 

@@ -3,13 +3,6 @@
 import { useMemo } from "react";
 import { ConfirmDialog } from "@/app/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { calculateAverage, calculateMedian } from "@/lib/utils";
 
 type Participant = {
@@ -73,48 +66,49 @@ export function Results({
   }, [revealed, previousRound]);
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <CardTitle>Results</CardTitle>
-            <CardDescription>
-              {revealed
-                ? "Votes distribution"
-                : previousRound
-                  ? "Previous results (re-estimating)"
-                  : "Reveal to see results"}
-            </CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
+    <div className="space-y-6 py-4">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <h3 className="text-lg font-semibold leading-none tracking-tight">
+            Results
+          </h3>
+          <p className="text-sm text-muted-foreground mt-1">
+            {revealed
+              ? "Votes distribution"
+              : previousRound
+                ? "Previous results (re-estimating)"
+                : "Reveal to see results"}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <ConfirmDialog
+            trigger={
+              <Button size="sm" disabled={!canReveal || revealed}>
+                Reveal
+              </Button>
+            }
+            title="Reveal all votes?"
+            description="This will show everyone's vote. This action cannot be undone."
+            actionLabel="Reveal"
+            onAction={onReveal}
+          />
+          {revealed && onReestimate && (
             <ConfirmDialog
               trigger={
-                <Button size="sm" disabled={!canReveal || revealed}>
-                  Reveal
+                <Button size="sm" variant="outline">
+                  Re-estimate
                 </Button>
               }
-              title="Reveal all votes?"
-              description="This will show everyone's vote. This action cannot be undone."
-              actionLabel="Reveal"
-              onAction={onReveal}
+              title="Wanna re-estimate?"
+              description="This will clear the current selection of the card."
+              actionLabel="Continue"
+              onAction={onReestimate}
             />
-            {revealed && onReestimate && (
-              <ConfirmDialog
-                trigger={
-                  <Button size="sm" variant="outline">
-                    Re-estimate
-                  </Button>
-                }
-                title="Wanna re-estimate?"
-                description="This will clear the current selection of the card."
-                actionLabel="Continue"
-                onAction={onReestimate}
-              />
-            )}
-          </div>
+          )}
         </div>
-      </CardHeader>
-      <CardContent>
+      </div>
+
+      <div className="pt-4 border-t">
         {!revealed ? (
           previousRound ? (
             <div className="space-y-4">
@@ -209,7 +203,7 @@ export function Results({
             </div>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

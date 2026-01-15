@@ -56,6 +56,7 @@ export type RoomState = {
   >;
   revealed: boolean;
   autoReveal: boolean;
+  story: { title: string; link: string } | null;
   timer?: {
     endTime: number | null;
     duration: number;

@@ -36,7 +36,6 @@ export function useRealtime(roomId: string, userName: string) {
 
   useEffect(() => {
     if (!roomId || !userName) {
-      console.error("❌ Missing roomId or userName:", { roomId, userName });
       return;
     }
 

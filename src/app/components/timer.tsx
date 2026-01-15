@@ -9,6 +9,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface TimerProps {
   timer: {
@@ -68,36 +73,56 @@ export function Timer({ timer, onStart, onStop }: TimerProps) {
     <div className="flex items-center gap-2">
       {timer && timeLeft !== null ? (
         <div className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-md border">
-          <TimerIcon className={`h-4 w-4 ${timeLeft < 10 ? "text-destructive animate-pulse" : ""}`} />
-          <span className={`font-mono font-medium min-w-[3ch] text-center ${timeLeft < 10 ? "text-destructive" : ""}`}>
+          <TimerIcon
+            className={`h-4 w-4 ${timeLeft < 10 ? "text-destructive animate-pulse" : ""}`}
+          />
+          <span
+            className={`font-mono font-medium min-w-[3ch] text-center ${timeLeft < 10 ? "text-destructive" : ""}`}
+          >
             {formatTime(timeLeft)}
           </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 ml-1 hover:bg-destructive/10 hover:text-destructive"
-            onClick={onStop}
-            title="Stop Timer"
-          >
-            <Square className="h-3 w-3 fill-current" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 ml-1 hover:bg-destructive/10 hover:text-destructive"
+                onClick={onStop}
+              >
+                <Square className="h-3 w-3 fill-current" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Stop Timer</TooltipContent>
+          </Tooltip>
         </div>
       ) : (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="flex items-center gap-2">
-              <Play className="h-4 w-4" />
-              <span className="hidden sm:inline">Start Timer</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {timerDurations.map((d) => (
-              <DropdownMenuItem key={d.value} onClick={() => onStart(d.value)}>
-                {d.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-2"
+                >
+                  <Play className="h-4 w-4" />
+                  <span>Start Timer</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {timerDurations.map((d) => (
+                  <DropdownMenuItem
+                    key={d.value}
+                    onClick={() => onStart(d.value)}
+                  >
+                    {d.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </TooltipTrigger>
+          <TooltipContent>Start discussion timer</TooltipContent>
+        </Tooltip>
       )}
     </div>
   );

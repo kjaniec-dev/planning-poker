@@ -1,6 +1,17 @@
 "use client";
 
-import { Ban, Eye, EyeOff } from "lucide-react";
+import {
+  Ban,
+  CheckCircle,
+  Copy,
+  Eye,
+  EyeOff,
+  History,
+  LayoutDashboard,
+  Link,
+  RotateCcw,
+  Settings,
+} from "lucide-react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/app/components/confirm-dialog";
@@ -19,6 +30,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useRealtime } from "@/lib/realtime/useRealtime";
 
 export default function GameRoomPage() {
@@ -80,11 +97,11 @@ export default function GameRoomPage() {
     stopTimer,
   } = useRealtime(room, currentName);
 
-  if (!mounted) return null;
-
   const me = participants.find((p) => p.name === currentName);
   const isSpectator = currentName === "Guest";
   const isPaused = Boolean(me?.paused);
+
+  const [activeTab, setActiveTab] = useState("voting");
 
   // SessionStorage key for persisting vote
   const getVoteKey = useCallback(
@@ -107,11 +124,19 @@ export default function GameRoomPage() {
     if (wasRevealed.current && !revealed) {
       setSelection(null);
       sessionStorage.removeItem(getVoteKey());
+      setActiveTab("voting");
     } else if (revealed && me && me.vote !== selection) {
       setSelection(me.vote);
     }
+
+    if (!wasRevealed.current && revealed) {
+      setActiveTab("results");
+    }
+
     wasRevealed.current = revealed;
   }, [revealed, getVoteKey, me, selection]);
+
+  if (!mounted) return null;
 
   // Wrapper for vote that persists to sessionStorage
   const handleVote = (value: string) => {
@@ -188,119 +213,222 @@ export default function GameRoomPage() {
         <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <Card>
-              <CardHeader>
-                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <CardTitle>Planning Poker</CardTitle>
-                    <CardDescription>
-                      Room {room} •{" "}
-                      {currentName ? `Welcome, ${currentName}.` : ""}
-                    </CardDescription>
-                  </div>
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                    <Timer
-                      timer={timer}
-                      onStart={startTimer}
-                      onStop={stopTimer}
-                    />
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toggleAutoReveal(!autoReveal)}
-                      title={autoReveal ? "Disable Auto-Reveal" : "Enable Auto-Reveal"}
-                      className="flex items-center gap-2"
-                    >
-                      {autoReveal ? (
-                        <>
-                          <EyeOff className="h-4 w-4" />
-                          <span className="hidden sm:inline">Auto-Reveal: On</span>
-                        </>
-                      ) : (
-                        <>
-                          <Eye className="h-4 w-4" />
-                          <span className="hidden sm:inline">Auto-Reveal: Off</span>
-                        </>
-                      )}
-                    </Button>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={copyGameUrl}
-                      title="Copy room link"
-                    >
-                      Copy room link
-                    </Button>
-                    <ConfirmDialog
-                      trigger={
-                        <Button size="sm" variant="ghost">
-                          Reset the game
-                        </Button>
-                      }
-                      title="Are you sure?"
-                      description="This will reset the game, clear all votes, and start a fresh round"
-                      actionLabel="Reset"
-                      onAction={handleReset}
-                    />
+              <CardHeader className="pb-3">
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                      <CardTitle>Planning Poker</CardTitle>
+                      <CardDescription>
+                        Room {room} •{" "}
+                        {currentName ? `Welcome, ${currentName}.` : ""}
+                      </CardDescription>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Timer
+                        timer={timer}
+                        onStart={startTimer}
+                        onStop={stopTimer}
+                      />
+                      <div className="h-6 w-px bg-border mx-1 hidden sm:block" />
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={copyGameUrl}
+                            className="flex items-center gap-2"
+                          >
+                            <Copy className="h-4 w-4" />
+                            <span>Copy Link</span>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Copy room link</TooltipContent>
+                      </Tooltip>
+                    </div>
                   </div>
                 </div>
               </CardHeader>
 
               <CardContent>
-                {isSpectator ? (
-                  <div className="flex h-40 flex-col items-center justify-center gap-4 text-center">
-                    <Ban className="size-12" />
-                    <div className="space-y-1">
-                      <p className="font-semibold">You are a spectator</p>
-                      <p className="text-sm text-muted-foreground">
-                        Enter your name to start voting.
-                      </p>
-                    </div>
-                    <form
-                      className="flex w-full max-w-sm items-center space-x-2"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        handleBecomeParticipant();
-                      }}
+                <Tabs
+                  value={activeTab}
+                  onValueChange={setActiveTab}
+                  className="w-full"
+                >
+                  <TabsList className="grid w-full grid-cols-4 mb-6">
+                    <TabsTrigger
+                      value="voting"
+                      className="flex items-center gap-2"
                     >
-                      <Input
-                        placeholder="Your Name"
-                        value={newName}
-                        autoFocus={true}
-                        onChange={(e) => setNewName(e.target.value)}
+                      <LayoutDashboard className="h-4 w-4" />
+                      <span>Voting</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="results"
+                      className="flex items-center gap-2"
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      <span>Results</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="history"
+                      className="flex items-center gap-2"
+                    >
+                      <History className="h-4 w-4" />
+                      <span>History</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="settings"
+                      className="flex items-center gap-2"
+                    >
+                      <Settings className="h-4 w-4" />
+                      <span>Settings</span>
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="voting" className="mt-0 outline-none">
+                    {isSpectator ? (
+                      <div className="flex h-40 flex-col items-center justify-center gap-4 text-center">
+                        <Ban className="size-12" />
+                        <div className="space-y-1">
+                          <p className="font-semibold">You are a spectator</p>
+                          <p className="text-sm text-muted-foreground">
+                            Enter your name to start voting.
+                          </p>
+                        </div>
+                        <form
+                          className="flex w-full max-w-sm items-center space-x-2"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleBecomeParticipant();
+                          }}
+                        >
+                          <Input
+                            placeholder="Your Name"
+                            value={newName}
+                            autoFocus={true}
+                            onChange={(e) => setNewName(e.target.value)}
+                          />
+                          <Button type="submit" disabled={!newName.trim()}>
+                            Join
+                          </Button>
+                        </form>
+                      </div>
+                    ) : (
+                      <VotingCards
+                        selection={selection}
+                        revealed={revealed}
+                        onSelect={(s) => setSelection(s)}
+                        vote={handleVote}
+                        resumeVoting={resumeVoting}
+                        suspendVoting={suspendVoting}
+                        isPaused={isPaused}
                       />
-                      <Button type="submit" disabled={!newName.trim()}>
-                        Join
-                      </Button>
-                    </form>
-                  </div>
-                ) : (
-                  <VotingCards
-                    selection={selection}
-                    revealed={revealed}
-                    onSelect={(s) => setSelection(s)}
-                    vote={handleVote}
-                    resumeVoting={resumeVoting}
-                    suspendVoting={suspendVoting}
-                    isPaused={isPaused}
-                  />
-                )}
+                    )}
+                  </TabsContent>
+
+                  <TabsContent value="results" className="mt-0 outline-none">
+                    <Results
+                      onReestimate={reestimate}
+                      participants={participants}
+                      revealed={revealed}
+                      onReveal={handleReveal}
+                      canReveal={!!selection}
+                      previousRound={history[history.length - 1] ?? undefined}
+                    />
+                  </TabsContent>
+
+                  <TabsContent value="history" className="mt-0 outline-none">
+                    <SessionHistory history={history} />
+                  </TabsContent>
+
+                  <TabsContent value="settings" className="mt-0 outline-none">
+                    <div className="space-y-6 py-4">
+                      <div className="flex flex-col gap-4">
+                        <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                          <div className="space-y-0.5">
+                            <h4 className="text-sm font-medium">Auto-Reveal</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Automatically reveal cards when everyone has voted
+                            </p>
+                          </div>
+                          <Button
+                            variant={autoReveal ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => toggleAutoReveal(!autoReveal)}
+                            className="flex items-center gap-2 min-w-[120px]"
+                          >
+                            {autoReveal ? (
+                              <>
+                                <EyeOff className="h-4 w-4" />
+                                <span>Enabled</span>
+                              </>
+                            ) : (
+                              <>
+                                <Eye className="h-4 w-4" />
+                                <span>Disabled</span>
+                              </>
+                            )}
+                          </Button>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                          <div className="space-y-0.5">
+                            <h4 className="text-sm font-medium">Room Link</h4>
+                            <p className="text-sm text-muted-foreground truncate max-w-[200px] sm:max-w-xs">
+                              {typeof window !== "undefined"
+                                ? `${location.origin}/game/${room}`
+                                : ""}
+                            </p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={copyGameUrl}
+                            className="flex items-center gap-2"
+                          >
+                            <Link className="h-4 w-4" />
+                            <span>Copy URL</span>
+                          </Button>
+                        </div>
+
+                        <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                          <div className="space-y-0.5">
+                            <h4 className="text-sm font-medium text-destructive">
+                              Danger Zone
+                            </h4>
+                            <p className="text-sm text-muted-foreground">
+                              Reset the current round and clear all votes
+                            </p>
+                          </div>
+                          <ConfirmDialog
+                            trigger={
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive hover:text-white"
+                              >
+                                <RotateCcw className="h-4 w-4" />
+                                <span>Reset Game</span>
+                              </Button>
+                            }
+                            title="Are you sure?"
+                            description="This will reset the game, clear all votes, and start a fresh round"
+                            actionLabel="Reset"
+                            onAction={handleReset}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
           </div>
 
           <div className="lg:col-span-1 space-y-6">
             <Participants participants={participants} />
-
-            <Results
-              onReestimate={reestimate}
-              participants={participants}
-              revealed={revealed}
-              onReveal={handleReveal}
-              canReveal={!!selection}
-              previousRound={history[history.length - 1] ?? undefined}
-            />
-
-            <SessionHistory history={history} />
           </div>
         </div>
       </main>
