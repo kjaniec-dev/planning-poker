@@ -47,3 +47,7 @@ next-env.d.ts
 # AI (personal configs)
 .serena
 .mcp.json
+
+
+# Misc
+local-tls/

@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pp-ws-ingress
+  namespace: default
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - secretName: planning-poker-local-tls
+      hosts:
+        - planning-poker.local
+  rules:
+    - host: planning-poker.local
+      http:
+        paths:
+          - path: /api/ws
+            pathType: Prefix
+            backend:
+              service:
+                name: pp-ws-planning-poker
+                port:
+                  number: 3001

@@ -1,0 +1,37 @@
+# Values for Planning Poker with Golang, Redis, and Ingress
+# Use this for a scaled deployment with a separate Golang WebSocket server and Redis backend.
+
+replicaCount: 3
+
+planningPoker:
+  mode: external
+  language: golang
+  env:
+    # Use your Redis service URL here. If using bitnami/redis chart:
+    redisUrl: "redis://redis-master:6379"
+    # WebSocket server URL (usually same as application URL in external mode if Ingress handles routing)
+    # Or internal service name if accessed directly:
+    realtimeUrl: "http://planning-poker.local"
+    allowedOrigins: "http://planning-poker.local"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/websocket-services: "planning-poker"
+    # Ensure sticky sessions if not using Redis (but we ARE using Redis here)
+    # nginx.ingress.kubernetes.io/affinity: "cookie"
+  hosts:
+    - host: planning-poker.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+# Ensure resources are set for 3 replicas
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi

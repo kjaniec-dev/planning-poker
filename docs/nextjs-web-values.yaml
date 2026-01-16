@@ -1,0 +1,33 @@
+# Configuration for Next.js Web App
+replicaCount: 1
+
+image:
+  repository: kjaniec/planning-poker
+  tag: latest
+
+planningPoker:
+  mode: external
+  env:
+    # URL that the browser will use to connect to WebSocket
+    realtimeUrl: "https://planning-poker.local:8443"
+    allowedOrigins: "https://planning-poker.local:8443"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    # Route WebSocket traffic to the Go server service
+    nginx.ingress.kubernetes.io/websocket-services: "pp-ws-planning-poker"
+  hosts:
+    - host: planning-poker.local
+      paths:
+        - path: /
+          pathType: Prefix
+        - path: /api/realtime
+          pathType: Prefix
+          serviceName: pp-ws-planning-poker
+          servicePort: 3001
+  tls:
+    - secretName: planning-poker-local-tls
+      hosts:
+        - planning-poker.local

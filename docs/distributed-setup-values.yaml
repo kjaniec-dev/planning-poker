@@ -1,0 +1,54 @@
+# Values for Planning Poker Distributed Setup
+# 1 Main Next.js Web Server
+# 3 Golang WebSocket Servers
+# Redis Deployed as a dependency
+# Ingress for routing
+
+# Main Next.js Application Replicas
+replicaCount: 1
+
+planningPoker:
+  mode: external
+  language: golang
+  
+  # External WebSocket server configuration
+  websocket:
+    enabled: true
+    replicaCount: 3
+    image:
+      repository: kjaniec/planning-poker-websocket-golang
+      tag: "latest"
+    service:
+      port: 3001
+
+  env:
+    # URL where users will access the main app
+    realtimeUrl: "http://planning-poker.local"
+    # Allowed origins for CORS
+    allowedOrigins: "http://planning-poker.local"
+    # Redis URL (internal service name from the dependency)
+    redisUrl: "redis://planning-poker-redis-master:6379"
+
+# Redis Dependency
+redis:
+  enabled: true
+  architecture: standalone
+  auth:
+    enabled: false
+  master:
+    persistence:
+      enabled: false
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/websocket-services: "planning-poker-websocket"
+  hosts:
+    - host: planning-poker.local
+      paths:
+        - path: /
+          pathType: Prefix
+        - path: /api/realtime
+          pathType: Prefix

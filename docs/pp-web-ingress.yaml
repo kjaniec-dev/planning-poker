@@ -1,0 +1,22 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pp-web-ingress
+  namespace: default
+spec:
+  ingressClassName: nginx
+  tls:
+    - secretName: planning-poker-local-tls
+      hosts:
+        - planning-poker.local
+  rules:
+    - host: planning-poker.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pp-web-planning-poker
+                port:
+                  number: 3000

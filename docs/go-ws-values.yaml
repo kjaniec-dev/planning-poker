@@ -1,0 +1,24 @@
+# Configuration for 3 Go WebSocket Servers
+replicaCount: 3
+
+image:
+  repository: kjaniec/planning-poker-golang-ws
+  tag: 1.1.0
+
+service:
+  port: 3001
+  targetPort: 3001
+
+planningPoker:
+  mode: external
+  language: golang
+  env:
+    # Points to the Bitnami Redis service
+    redisUrl: "redis://pp-redis-master:6379"
+    # The URL where users will access the app (for CORS)
+    allowedOrigins: "https://planning-poker.local:8443"
+
+# Ingress is handled by the Web release, but we can enable it here if needed.
+# For this setup, we'll route /api/realtime to this service in the Web release.
+ingress:
+  enabled: false
