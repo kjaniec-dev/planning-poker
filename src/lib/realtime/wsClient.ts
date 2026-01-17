@@ -48,6 +48,7 @@ function notifyListeners(message: WSMessage) {
 
 function doJoinIfNeeded() {
   if (socket && socket.readyState === WebSocket.OPEN && lastJoin) {
+    console.log("📤 [wsClient] Sending join-room for:", lastJoin.roomId, "name:", lastJoin.name);
     const joinMessage = {
       type: "join-room",
       data: {
@@ -77,6 +78,7 @@ export function connectIfNeeded() {
   socket = ws;
 
   ws.onopen = () => {
+    console.log("🔌 [wsClient] WebSocket connected to:", url);
     isConnecting = false;
     reconnectAttempts = 0;
 
@@ -86,6 +88,9 @@ export function connectIfNeeded() {
   ws.onmessage = (event) => {
     try {
       const msg: WSMessage = JSON.parse(event.data);
+      if (msg.type === "room-state") {
+        console.log("📥 [wsClient] Received room-state:", msg.data);
+      }
       notifyListeners(msg);
     } catch (err) {
       console.error("❌ [wsClient] Failed to parse message:", err);
@@ -121,10 +126,18 @@ export function connectIfNeeded() {
 
 export function joinRoom(roomId: string, name: string) {
   const participantId = getOrCreateParticipantId();
+  const oldLastJoin = lastJoin;
   lastJoin = { roomId, name, participantId };
-  connectIfNeeded();
+
+  console.log("📍 [wsClient] joinRoom called:", { roomId, name, participantId });
+  
+  // If we were already connected but to a different room, we should trigger join immediately
   if (socket && socket.readyState === WebSocket.OPEN) {
-    doJoinIfNeeded();
+    if (!oldLastJoin || oldLastJoin.roomId !== roomId || oldLastJoin.name !== name) {
+      doJoinIfNeeded();
+    }
+  } else {
+    connectIfNeeded();
   }
 }
 

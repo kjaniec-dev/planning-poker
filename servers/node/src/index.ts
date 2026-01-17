@@ -42,18 +42,20 @@ function verifyClient(info: {
   return isAllowed;
 }
 
+type Participant = {
+  id: string;
+  name: string;
+  vote: string | null;
+  paused?: boolean;
+  participantId?: string;
+  connected: boolean;
+  lastSeen: number;
+  replicaId: string; // Track which replica owns this connection
+};
+
 export type RoomState = {
   id: string;
-  participants: Map<
-    string,
-    {
-      id: string;
-      name: string;
-      vote: string | null;
-      paused?: boolean;
-      participantId?: string;
-    }
-  >;
+  participants: Map<string, Participant>;
   revealed: boolean;
   autoReveal: boolean;
   story: { title: string; link: string } | null;
@@ -82,6 +84,9 @@ type WSMessage = {
 
 const rooms = new Map<string, RoomState>();
 const clients = new Map<string, ExtendedWebSocket>();
+
+// Generate unique replica ID from hostname or random value
+const replicaId = process.env.HOSTNAME || generateId();
 
 export function getOrCreateRoom(roomId: string): RoomState {
   if (!rooms.has(roomId)) {
@@ -123,9 +128,12 @@ function broadcastToRoom(
 
   room.participants.forEach((participant) => {
     if (participant.id !== excludeId) {
-      const client = clients.get(participant.id);
-      if (client) {
-        sendToClient(client, type, data);
+      // Only send to participants connected to THIS replica
+      if (participant.replicaId === replicaId) {
+        const client = clients.get(participant.id);
+        if (client) {
+          sendToClient(client, type, data);
+        }
       }
     }
   });
@@ -215,8 +223,16 @@ export function initWebSocketServer(httpServer: HTTPServer) {
     }
   }, 30000);
 
+  // Cleanup stale participants every minute
+  const cleanupInterval = setInterval(() => {
+    cleanupStaleParticipants();
+  }, 60000);
+
   wss.on("close", () => {
     clearInterval(interval);
+    if (cleanupInterval) {
+      clearInterval(cleanupInterval);
+    }
   });
 
   wss.on("connection", (ws: WebSocket) => {
@@ -225,7 +241,7 @@ export function initWebSocketServer(httpServer: HTTPServer) {
     extWs.isAlive = true;
     clients.set(extWs.id, extWs);
 
-    console.log("✅ Client connected:", extWs.id);
+    console.log(`✅ Client connected: ${extWs.id} (replica: ${replicaId})`);
 
     ws.on("pong", () => {
       extWs.isAlive = true;
@@ -258,7 +274,7 @@ export function initWebSocketServer(httpServer: HTTPServer) {
     });
   });
 
-  console.log("✓ WebSocket server initialized");
+  console.log(`✓ WebSocket server initialized (Replica ID: ${replicaId})`);
   return wss;
 }
 
@@ -327,13 +343,7 @@ function handleJoinRoom(
   const room = getOrCreateRoom(roomId);
 
   // First, try to match by participantId if provided
-  let existingParticipant: {
-    id: string;
-    name: string;
-    vote: string | null;
-    paused?: boolean;
-    participantId?: string;
-  } | null = null;
+  let existingParticipant: Participant | null = null;
   let oldId: string | null = null;
 
   if (participantId) {
@@ -387,6 +397,9 @@ function handleJoinRoom(
       vote: existingParticipant.vote,
       paused: existingParticipant.paused,
       participantId: participantId || existingParticipant.participantId,
+      connected: true,
+      lastSeen: Date.now(),
+      replicaId,
     });
   } else if (existingParticipant && oldClientStillConnected) {
     // Duplicate name from an active connection - generate unique name
@@ -417,6 +430,9 @@ function handleJoinRoom(
       name: uniqueName,
       vote: null,
       participantId,
+      connected: true,
+      lastSeen: Date.now(),
+      replicaId,
     });
   } else {
     // New participant
@@ -425,11 +441,14 @@ function handleJoinRoom(
       name,
       vote: null,
       participantId,
+      connected: true,
+      lastSeen: Date.now(),
+      replicaId,
     });
   }
 
   const roomState = {
-    participants: Array.from(room.participants.values()),
+    participants: getParticipantsArray(room),
     revealed: room.revealed,
     autoReveal: room.autoReveal,
     timer: room.timer ?? null,
@@ -441,11 +460,7 @@ function handleJoinRoom(
   sendToClient(ws, "room-state", roomState);
 
   console.log("📤 Broadcasting room-state to other clients in", roomId);
-  broadcastToRoom(roomId, "room-state", roomState, ws.id);
-
-  if (process.env.REDIS_URL) {
-    publishToRedis(roomId, "room-state", roomState, ws.id).catch(console.error);
-  }
+  emitToRoom(roomId, "room-state", roomState, ws.id);
   console.log("✅ join-room completed for", ws.id);
 }
 
@@ -474,7 +489,7 @@ function handleVote(
 
     if (room.autoReveal && !room.revealed && vote) {
       const activeParticipants = Array.from(room.participants.values()).filter(
-        (p) => !p.paused && clients.has(p.id),
+        (p) => !p.paused && p.connected,
       );
       const allVoted = activeParticipants.every((p) => p.vote);
       if (allVoted && activeParticipants.length > 0) {
@@ -503,7 +518,7 @@ function handleReveal(_ws: ExtendedWebSocket, data: { roomId: string }) {
   room.history.push(round);
 
   emitToRoom(roomId, "revealed", {
-    participants: Array.from(room.participants.values()),
+    participants: getParticipantsArray(room),
     history: room.history,
   });
 }
@@ -514,12 +529,20 @@ function handleReestimate(_ws: ExtendedWebSocket, data: { roomId: string }) {
   if (!room) return;
 
   room.revealed = false;
-  for (const p of room.participants.values()) {
+
+  // Clear votes and remove disconnected participants that belong to this replica
+  for (const [id, p] of room.participants.entries()) {
     p.vote = null;
+
+    // Only remove disconnected participants that belong to THIS replica
+    if (p.replicaId === replicaId && !clients.has(id)) {
+      console.log(`🧹 Removing disconnected participant ${id} during re-estimate`);
+      room.participants.delete(id);
+    }
   }
 
   emitToRoom(roomId, "room-state", {
-    participants: Array.from(room.participants.values()),
+    participants: getParticipantsArray(room),
     revealed: room.revealed,
     autoReveal: room.autoReveal,
     timer: room.timer ?? null,
@@ -534,15 +557,23 @@ function handleReset(_ws: ExtendedWebSocket, data: { roomId: string }) {
   if (!room) return;
 
   room.revealed = false;
-  for (const p of room.participants.values()) {
+
+  // Clear votes and remove disconnected participants that belong to this replica
+  for (const [id, p] of room.participants.entries()) {
     p.vote = null;
+
+    // Only remove disconnected participants that belong to THIS replica
+    if (p.replicaId === replicaId && !clients.has(id)) {
+      console.log(`🧹 Removing disconnected participant ${id} during reset`);
+      room.participants.delete(id);
+    }
   }
 
   room.history = [];
   room.story = null;
 
   emitToRoom(roomId, "room-reset", {
-    participants: Array.from(room.participants.values()),
+    participants: getParticipantsArray(room),
     story: room.story ?? null,
     history: room.history,
   });
@@ -569,7 +600,7 @@ function handleSuspendVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
     if (participant) {
       participant.paused = true;
       emitToRoom(roomId, "room-state", {
-        participants: Array.from(room.participants.values()),
+        participants: getParticipantsArray(room),
         revealed: room.revealed,
         autoReveal: room.autoReveal,
         timer: room.timer ?? null,
@@ -588,7 +619,7 @@ function handleResumeVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
     if (participant) {
       participant.paused = false;
       emitToRoom(roomId, "room-state", {
-        participants: Array.from(room.participants.values()),
+        participants: getParticipantsArray(room),
         revealed: room.revealed,
         autoReveal: room.autoReveal,
         timer: room.timer ?? null,
@@ -600,23 +631,107 @@ function handleResumeVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
 }
 
 function handleDisconnect(ws: ExtendedWebSocket) {
-  console.log("Client disconnected:", ws.id);
+  console.log("❌ Client disconnected:", ws.id);
   clients.delete(ws.id);
 
-  // Note: We intentionally DO NOT remove participants from rooms on disconnect
-  // This allows their votes to persist when they reconnect (e.g., after page refresh)
-  // Participants are only removed when the game is explicitly reset
-  // However, we still notify other clients that someone disconnected
-  rooms.forEach((room, _roomId) => {
-    if (room.participants.has(ws.id)) {
-      console.log(
-        "🔄 Keeping participant data for potential reconnection:",
-        ws.id,
-      );
-      // Don't delete, just notify others
-      // The participant will be updated with new ID when they rejoin with same name
+  if (ws.roomId) {
+    const room = rooms.get(ws.roomId);
+    if (room) {
+      const participant = room.participants.get(ws.id);
+      if (participant && participant.replicaId === replicaId) {
+        console.log(`🔄 Participant ${ws.id} disconnected from room ${ws.roomId}`);
+        participant.connected = false;
+        participant.lastSeen = Date.now();
+
+        // If they haven't voted and aren't paused, remove them immediately
+        if (!participant.vote && !participant.paused) {
+          console.log(`🧹 Removing inactive participant ${ws.id} from room ${ws.roomId}`);
+          room.participants.delete(ws.id);
+        }
+
+        // Broadcast the updated state
+        const roomState = {
+          participants: getParticipantsArray(room),
+          revealed: room.revealed,
+          autoReveal: room.autoReveal,
+          timer: room.timer ?? null,
+          story: room.story ?? null,
+          history: room.history,
+        };
+        emitToRoom(ws.roomId, "room-state", roomState);
+      }
+    }
+  }
+}
+
+function cleanupStaleParticipants() {
+  const now = Date.now();
+  const staleTimeout = 5 * 60 * 1000; // 5 minutes
+
+  rooms.forEach((room, roomId) => {
+    let removed = false;
+
+    for (const [id, participant] of room.participants.entries()) {
+      // Only manage participants that belong to THIS replica
+      if (participant.replicaId !== replicaId) {
+        continue;
+      }
+
+      // Check if connected locally (should be since this is our replica)
+      const isConnectedLocally = clients.has(id);
+
+      if (isConnectedLocally) {
+        participant.connected = true;
+        participant.lastSeen = now;
+        continue;
+      }
+
+      // Not connected locally and belongs to this replica
+      if (participant.connected) {
+        participant.connected = false;
+        participant.lastSeen = now;
+      }
+
+      // If disconnected for too long, remove them
+      if (!participant.connected && participant.lastSeen > 0 && (now - participant.lastSeen) > staleTimeout) {
+        console.log(`🧹 Removing stale participant ${id} from room ${roomId} (offline for ${now - participant.lastSeen}ms)`);
+        room.participants.delete(id);
+        removed = true;
+      }
+    }
+
+    if (removed) {
+      const roomState = {
+        participants: getParticipantsArray(room),
+        revealed: room.revealed,
+        autoReveal: room.autoReveal,
+        timer: room.timer ?? null,
+        story: room.story ?? null,
+        history: room.history,
+      };
+      emitToRoom(roomId, "room-state", roomState);
     }
   });
+}
+
+function getParticipantsArray(room: RoomState): Participant[] {
+  const participants: Participant[] = [];
+
+  for (const participant of room.participants.values()) {
+    // Create a copy to avoid modifying the original
+    const participantCopy = { ...participant };
+
+    // Only update connection status for participants owned by THIS replica
+    if (participantCopy.replicaId === replicaId) {
+      const isConnectedLocally = clients.has(participantCopy.id);
+      participantCopy.connected = isConnectedLocally;
+    }
+    // For participants from other replicas, trust the stored connected status
+
+    participants.push(participantCopy);
+  }
+
+  return participants;
 }
 
 function handleUpdateName(
@@ -675,7 +790,7 @@ function handleUpdateName(
   participant.name = finalName;
 
   const roomState = {
-    participants: Array.from(room.participants.values()),
+    participants: getParticipantsArray(room),
     revealed: room.revealed,
     autoReveal: room.autoReveal,
     timer: room.timer ?? null,

@@ -9,6 +9,7 @@ type Participant = {
   name: string;
   vote: string | null;
   paused?: boolean;
+  connected?: boolean;
 };
 
 type Props = {
@@ -26,7 +27,7 @@ function getInitials(name: string) {
 
 export function Participants({ participants }: Props) {
   const votingParticipants = participants.filter(
-    (p) => p.name !== "Guest" && !p.paused,
+    (p) => p.name !== "Guest" && !p.paused && (p.connected ?? true),
   );
   const votedCount = votingParticipants.filter((p) => p.vote != null).length;
   const progress =
@@ -62,7 +63,9 @@ export function Participants({ participants }: Props) {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="flex items-center justify-between rounded-md border px-3 py-2 bg-card/50"
+                className={`flex items-center justify-between rounded-md border px-3 py-2 bg-card/50 ${
+                  p.connected === false ? "opacity-50 grayscale-[0.5]" : ""
+                }`}
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground ring-1 ring-border shadow-sm">
@@ -71,6 +74,7 @@ export function Participants({ participants }: Props) {
                   <div className="flex flex-col">
                     <span className="text-sm font-medium leading-none">
                       {p.name}
+                      {p.connected === false && " (Offline)"}
                     </span>
                     {p.paused && (
                       <span className="text-[10px] text-muted-foreground mt-1">

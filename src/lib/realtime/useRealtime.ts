@@ -11,6 +11,7 @@ type Participant = {
   name: string;
   vote: string | null;
   paused?: boolean;
+  connected?: boolean;
 };
 
 type Story = { title: string; link: string } | null;

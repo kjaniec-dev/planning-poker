@@ -24,6 +24,9 @@ type Participant struct {
 	Vote          *string `json:"vote"`
 	Paused        bool    `json:"paused,omitempty"`
 	ParticipantId string  `json:"participantId,omitempty"`
+	Connected     bool    `json:"connected"`
+	LastSeen      int64   `json:"lastSeen,omitempty"`
+	ReplicaID     string  `json:"replicaId,omitempty"` // Track which replica owns this connection
 }
 
 type Story struct {
@@ -44,13 +47,13 @@ type Timer struct {
 }
 
 type RoomState struct {
-	ID           string
-	Participants map[string]*Participant
-	Revealed     bool
-	AutoReveal   bool
-	Timer        *Timer
-	Story        *Story
-	History      []HistoryRound
+	ID           string                  `json:"id"`
+	Participants map[string]*Participant `json:"participants"`
+	Revealed     bool                    `json:"revealed"`
+	AutoReveal   bool                    `json:"autoReveal"`
+	Timer        *Timer                  `json:"timer"`
+	Story        *Story                  `json:"story"`
+	History      []HistoryRound          `json:"history"`
 	mu           sync.RWMutex
 }
 
@@ -84,15 +87,24 @@ type Server struct {
 	ctx         context.Context
 	cancel      context.CancelFunc
 	heartbeat   *time.Ticker
+	replicaID   string // Unique ID for this replica instance
 }
 
 func NewServer() *Server {
 	ctx, cancel := context.WithCancel(context.Background())
+
+	// Generate unique replica ID from hostname or random value
+	replicaID := os.Getenv("HOSTNAME")
+	if replicaID == "" {
+		replicaID = generateID()
+	}
+
 	s := &Server{
-		rooms:   make(map[string]*RoomState),
-		clients: make(map[string]*ExtendedWebSocket),
-		ctx:     ctx,
-		cancel:  cancel,
+		rooms:     make(map[string]*RoomState),
+		clients:   make(map[string]*ExtendedWebSocket),
+		ctx:       ctx,
+		cancel:    cancel,
+		replicaID: replicaID,
 	}
 
 	// Configure WebSocket upgrader with origin validation
@@ -120,10 +132,17 @@ func NewServer() *Server {
 
 func (s *Server) getOrCreateRoom(roomID string) *RoomState {
 	s.roomsMu.Lock()
-	defer s.roomsMu.Unlock()
-
 	if room, exists := s.rooms[roomID]; exists {
+		s.roomsMu.Unlock()
 		return room
+	}
+
+	// Try to load from Redis first
+	loadedRoom := s.loadRoomState(roomID)
+	if loadedRoom != nil {
+		s.rooms[roomID] = loadedRoom
+		s.roomsMu.Unlock()
+		return loadedRoom
 	}
 
 	room := &RoomState{
@@ -136,7 +155,78 @@ func (s *Server) getOrCreateRoom(roomID string) *RoomState {
 		History:      []HistoryRound{},
 	}
 	s.rooms[roomID] = room
+	s.roomsMu.Unlock()
 	return room
+}
+
+func (s *Server) saveRoomState(roomID string) {
+	if s.redisPub == nil {
+		return
+	}
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	room.mu.RLock()
+	payload, err := json.Marshal(room)
+	room.mu.RUnlock()
+
+	if err != nil {
+		log.Printf("Error marshaling room state for %s: %v", roomID, err)
+		return
+	}
+
+	key := "room:" + roomID
+	if err := s.redisPub.Set(s.ctx, key, payload, 24*time.Hour).Err(); err != nil {
+		log.Printf("Error saving room state to Redis for %s: %v", roomID, err)
+	}
+
+	// Notify other replicas to refresh their local state
+	// We use room-updated to signal a full refresh from Redis
+	s.publishToRedis(roomID, "room-updated", nil, "")
+}
+
+func (s *Server) loadRoomState(roomID string) *RoomState {
+	if s.redisPub == nil {
+		return nil
+	}
+
+	key := "room:" + roomID
+	payload, err := s.redisPub.Get(s.ctx, key).Result()
+	if err == redis.Nil {
+		return nil
+	} else if err != nil {
+		log.Printf("Error loading room state from Redis for %s: %v", roomID, err)
+		return nil
+	}
+
+	var room RoomState
+	if err := json.Unmarshal([]byte(payload), &room); err != nil {
+		log.Printf("Error unmarshaling room state for %s: %v", roomID, err)
+		return nil
+	}
+
+	// Ensure internal mutex is initialized (not serialized)
+	room.mu = sync.RWMutex{}
+
+	// Aggregated connection status: if we unmarshal from Redis, we don't know
+	// which replica is actually holding the connection.
+	// But we know that Participant.Connected=true means someone IS connected.
+
+	// Ensure maps are initialized if they were null in JSON
+	if room.Participants == nil {
+		room.Participants = make(map[string]*Participant)
+	}
+	if room.History == nil {
+		room.History = []HistoryRound{}
+	}
+
+	return &room
 }
 
 
@@ -172,17 +262,21 @@ func (s *Server) broadcastToRoom(roomID string, msgType string, data interface{}
 
 	excludeMap := make(map[string]bool)
 	for _, id := range excludeID {
-		excludeMap[id] = true
+		if id != "" {
+			excludeMap[id] = true
+		}
 	}
 
 	s.clientsMu.RLock()
 	defer s.clientsMu.RUnlock()
 
-	for _, participant := range room.Participants {
-		if !excludeMap[participant.ID] {
-			if client, ok := s.clients[participant.ID]; ok {
+	for id := range room.Participants {
+		if !excludeMap[id] {
+			if client, ok := s.clients[id]; ok {
+				// Use a non-blocking or at least robust write
+				// (WriteJSON is blocking, but we can't easily make it non-blocking here without complexity)
 				if err := client.WriteJSON(message); err != nil {
-					log.Printf("Error broadcasting to client %s: %v", client.ID, err)
+					log.Printf("Error broadcasting to client %s in room %s: %v", id, roomID, err)
 				}
 			}
 		}
@@ -211,7 +305,27 @@ func (s *Server) setupRedisSubscription() {
 					log.Printf("Redis message parse error: %v", err)
 					continue
 				}
-				s.broadcastToRoom(redisMsg.RoomID, redisMsg.Type, redisMsg.Data, redisMsg.ExcludeID)
+				if redisMsg.Type == "room-updated" {
+					// Reload state from Redis
+					loadedRoom := s.loadRoomState(redisMsg.RoomID)
+					if loadedRoom != nil {
+						s.roomsMu.Lock()
+						s.rooms[redisMsg.RoomID] = loadedRoom
+						s.roomsMu.Unlock()
+						// Optionally broadcast the new state to local clients
+						s.broadcastRoomState(redisMsg.RoomID)
+					}
+				} else if redisMsg.Type == "participant-moved" {
+					if data, ok := redisMsg.Data.(map[string]interface{}); ok {
+						pID, _ := data["participantId"].(string)
+						newRoomID, _ := data["newRoomId"].(string)
+						if pID != "" && newRoomID != "" {
+							s.handleGlobalParticipantMoved(pID, newRoomID)
+						}
+					}
+				} else {
+					s.broadcastToRoom(redisMsg.RoomID, redisMsg.Type, redisMsg.Data, redisMsg.ExcludeID)
+				}
 			case <-s.ctx.Done():
 				pubsub.Close()
 				return
@@ -253,6 +367,7 @@ func (s *Server) emitToRoom(roomID string, msgType string, data interface{}, exc
 
 func (s *Server) startHeartbeat() {
 	s.heartbeat = time.NewTicker(30 * time.Second)
+	cleanupTicker := time.NewTicker(1 * time.Minute)
 
 	go func() {
 		for {
@@ -268,11 +383,99 @@ func (s *Server) startHeartbeat() {
 					}
 				}
 				s.clientsMu.Unlock()
+			case <-cleanupTicker.C:
+				s.cleanupStaleParticipants()
 			case <-s.ctx.Done():
+				cleanupTicker.Stop()
 				return
 			}
 		}
 	}()
+}
+
+func (s *Server) cleanupStaleParticipants() {
+	s.roomsMu.RLock()
+	rooms := make([]*RoomState, 0, len(s.rooms))
+	for _, room := range s.rooms {
+		rooms = append(rooms, room)
+	}
+	s.roomsMu.RUnlock()
+
+	now := time.Now().UnixMilli()
+	// 5 minutes timeout for offline users
+	const staleTimeout = 5 * 60 * 1000
+
+	for _, room := range rooms {
+		room.mu.Lock()
+		removed := false
+		for id, p := range room.Participants {
+			// Only manage participants that belong to THIS replica
+			if p.ReplicaID != s.replicaID {
+				// This participant belongs to another replica - don't touch it
+				continue
+			}
+
+			// Check if connected locally (should be since this is our replica)
+			s.clientsMu.RLock()
+			_, isConnectedLocally := s.clients[id]
+			s.clientsMu.RUnlock()
+
+			if isConnectedLocally {
+				p.Connected = true
+				p.LastSeen = now
+				continue
+			}
+
+			// Not connected locally and belongs to this replica
+			// If they were marked connected but aren't anymore, update status
+			if p.Connected {
+				p.Connected = false
+				p.LastSeen = now
+			}
+
+			// If disconnected for too long, remove them
+			if !p.Connected && p.LastSeen > 0 && (now-p.LastSeen) > staleTimeout {
+				log.Printf("🧹 Removing stale participant %s from room %s (offline for %dms)", id, room.ID, now-p.LastSeen)
+				delete(room.Participants, id)
+				removed = true
+			}
+		}
+		roomID := room.ID
+		room.mu.Unlock()
+
+		if removed {
+			s.broadcastRoomState(roomID)
+			s.saveRoomStateWithoutNotify(roomID)
+		}
+	}
+}
+
+func (s *Server) saveRoomStateWithoutNotify(roomID string) {
+	if s.redisPub == nil {
+		return
+	}
+
+	s.roomsMu.RLock()
+	room, exists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	room.mu.RLock()
+	payload, err := json.Marshal(room)
+	room.mu.RUnlock()
+
+	if err != nil {
+		log.Printf("Error marshaling room state for %s: %v", roomID, err)
+		return
+	}
+
+	key := "room:" + roomID
+	if err := s.redisPub.Set(s.ctx, key, payload, 24*time.Hour).Err(); err != nil {
+		log.Printf("Error saving room state to Redis for %s: %v", roomID, err)
+	}
 }
 
 func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface{}) {
@@ -285,6 +488,21 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 	participantId, _ := data["participantId"].(string)
 	log.Printf("📥 join-room: roomId=%s, name=%s, participantId=%s, clientId=%s", roomID, name, participantId, ws.ID)
 
+	// If the client was already in another room, remove them from that room first
+	if ws.RoomID != "" && ws.RoomID != roomID {
+		s.roomsMu.RLock()
+		oldRoom, exists := s.rooms[ws.RoomID]
+		s.roomsMu.RUnlock()
+		if exists {
+			log.Printf("🚪 Removing client %s from old room %s", ws.ID, ws.RoomID)
+			oldRoom.mu.Lock()
+			delete(oldRoom.Participants, ws.ID)
+			oldRoom.mu.Unlock()
+			s.broadcastRoomState(ws.RoomID)
+			s.saveRoomState(ws.RoomID)
+		}
+	}
+
 	ws.RoomID = roomID
 	room := s.getOrCreateRoom(roomID)
 
@@ -294,6 +512,13 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 	var oldID string
 
 	if participantId != "" {
+		// Announce to all replicas that this participant has moved to this room
+		// This helps remove "ghosts" from other rooms
+		s.publishToRedis(roomID, "participant-moved", map[string]string{
+			"participantId": participantId,
+			"newRoomId":      roomID,
+		}, ws.ID)
+
 		for id, participant := range room.Participants {
 			if participant.ParticipantId == participantId {
 				existingParticipant = participant
@@ -306,7 +531,13 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 	// If no participantId match, fall back to matching by name (backwards compatibility)
 	if existingParticipant == nil {
 		for id, participant := range room.Participants {
-			if participant.Name == name {
+			// Match by name AND check if that participant is actually disconnected
+			// (If someone is already connected with that name, we don't restore)
+			s.clientsMu.RLock()
+			isDisconnected := s.clients[id] == nil
+			s.clientsMu.RUnlock()
+
+			if participant.Name == name && isDisconnected {
 				existingParticipant = participant
 				oldID = id
 				break
@@ -315,34 +546,50 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 	}
 
 	// Check if this is a reconnection or a duplicate name from an active connection
-	s.clientsMu.RLock()
-	oldClientStillConnected := oldID != "" && s.clients[oldID] != nil
-	s.clientsMu.RUnlock()
+	// If we matched by name above, we already checked isDisconnected.
+	// If we matched by participantId, we still need to check if that ID is currently active.
 
 	// Special case: if oldID == ws.ID, this is the same connection updating their info
 	// (e.g., after an update-name), so just update the participant in place
 	if existingParticipant != nil && oldID == ws.ID {
 		log.Printf("🔄 Same connection updating info for %s (ID: %s)", name, ws.ID)
 		room.Participants[ws.ID].Name = name
-		// Don't need to do anything else, participant already exists
-	} else if existingParticipant != nil && oldID != "" && !oldClientStillConnected {
-		// This is a legitimate reconnection - the old client is gone
-		log.Printf("🔄 Restoring participant data for %s (old ID: %s, new ID: %s)", name, oldID, ws.ID)
-		// Remove old entry
-		delete(room.Participants, oldID)
-		// Add with new ID but preserve vote, paused state, and participantId
-		persistedParticipantId := participantId
-		if persistedParticipantId == "" {
-			persistedParticipantId = existingParticipant.ParticipantId
+		room.Participants[ws.ID].Connected = true
+		room.Participants[ws.ID].LastSeen = time.Now().UnixMilli()
+		room.Participants[ws.ID].ReplicaID = s.replicaID
+	} else if existingParticipant != nil && oldID != ws.ID {
+		// Existing participant found but with a different connection ID
+		// (Either reconnection or same user in different tab/browser)
+		
+		// If the old connection is still active on THIS instance, we should probably 
+		// close it or at least handle the takeover.
+		s.clientsMu.RLock()
+		oldClient, isLocal := s.clients[oldID]
+		s.clientsMu.RUnlock()
+		
+		if isLocal && oldClient != nil {
+			log.Printf("🔌 Closing old local connection %s for participant %s", oldID, name)
+			oldClient.Close()
+			// handleClientDisconnect will be called for oldClient
 		}
+
+		log.Printf("🔄 Updating participant %s to new connection %s", name, ws.ID)
+		
+		// Remove old entry if it exists
+		delete(room.Participants, oldID)
+		
+		// Create new entry with same data but new ID
 		room.Participants[ws.ID] = &Participant{
 			ID:            ws.ID,
 			Name:          name,
 			Vote:          existingParticipant.Vote,
 			Paused:        existingParticipant.Paused,
-			ParticipantId: persistedParticipantId,
+			ParticipantId: existingParticipant.ParticipantId,
+			Connected:     true,
+			LastSeen:      time.Now().UnixMilli(),
+			ReplicaID:     s.replicaID,
 		}
-	} else if existingParticipant != nil && oldClientStillConnected {
+	} else if existingParticipant != nil {
 		// Duplicate name from an active connection - generate unique name
 		// Only check connected participants to avoid conflicts with disconnected users
 		uniqueName := name
@@ -354,7 +601,7 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 			s.clientsMu.RLock()
 			for _, p := range room.Participants {
 				// Only check if participant is still connected
-				if p.Name == uniqueName && s.clients[p.ID] != nil {
+				if p.Name == uniqueName && (p.Connected || s.clients[p.ID] != nil) {
 					nameExists = true
 					break
 				}
@@ -375,6 +622,9 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 			Name:          uniqueName,
 			Vote:          nil,
 			ParticipantId: participantId,
+			Connected:     true,
+			LastSeen:      time.Now().UnixMilli(),
+			ReplicaID:     s.replicaID,
 		}
 	} else {
 		// New participant
@@ -383,11 +633,15 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 			Name:          name,
 			Vote:          nil,
 			ParticipantId: participantId,
+			Connected:     true,
+			LastSeen:      time.Now().UnixMilli(),
+			ReplicaID:     s.replicaID,
 		}
 	}
 	room.mu.Unlock()
 
 	s.broadcastRoomState(roomID)
+	s.saveRoomState(roomID)
 }
 
 func (s *Server) handleVote(ws *ExtendedWebSocket, data map[string]interface{}) {
@@ -420,7 +674,7 @@ func (s *Server) handleVote(ws *ExtendedWebSocket, data map[string]interface{}) 
 
 			s.clientsMu.RLock()
 			for _, p := range room.Participants {
-				if !p.Paused && s.clients[p.ID] != nil {
+				if !p.Paused && (p.Connected || s.clients[p.ID] != nil) {
 					activeParticipantsCount++
 					if p.Vote != nil && *p.Vote != "" {
 						votedCount++
@@ -442,6 +696,7 @@ func (s *Server) handleVote(ws *ExtendedWebSocket, data map[string]interface{}) 
 	// Broadcast that a participant has voted, but don't send the full state yet
 	// This is more efficient for just showing the checkmark icon
 	s.broadcastToRoom(roomID, "participant-voted", map[string]interface{}{"id": ws.ID, "hasVote": vote != ""})
+	s.saveRoomState(roomID)
 }
 
 func (s *Server) handleReveal(ws *ExtendedWebSocket, data map[string]interface{}) {
@@ -476,6 +731,7 @@ func (s *Server) handleReveal(ws *ExtendedWebSocket, data map[string]interface{}
 		"history":      history,
 	}
 	s.broadcastToRoom(roomID, "revealed", revealedData)
+	s.saveRoomState(roomID)
 }
 
 func (s *Server) handleReestimate(ws *ExtendedWebSocket, data map[string]interface{}) {
@@ -491,11 +747,24 @@ func (s *Server) handleReestimate(ws *ExtendedWebSocket, data map[string]interfa
 
 	room.mu.Lock()
 	room.Revealed = false
-	for _, p := range room.Participants {
+	for id, p := range room.Participants {
 		p.Vote = nil
+
+		// Only remove disconnected participants that belong to THIS replica
+		if p.ReplicaID == s.replicaID {
+			s.clientsMu.RLock()
+			_, isConnectedLocally := s.clients[id]
+			s.clientsMu.RUnlock()
+
+			if !isConnectedLocally {
+				log.Printf("🧹 Removing disconnected participant %s during re-estimate", id)
+				delete(room.Participants, id)
+			}
+		}
 	}
 	room.mu.Unlock()
 	s.broadcastRoomState(roomID)
+	s.saveRoomState(roomID)
 }
 
 func (s *Server) handleReset(ws *ExtendedWebSocket, data map[string]interface{}) {
@@ -511,9 +780,25 @@ func (s *Server) handleReset(ws *ExtendedWebSocket, data map[string]interface{})
 
 	room.mu.Lock()
 	room.Revealed = false
-	for _, p := range room.Participants {
+
+	// When resetting, we should also clear out any disconnected participants
+	// to keep the room fresh for the next round.
+	for id, p := range room.Participants {
 		p.Vote = nil
+
+		// Only remove disconnected participants that belong to THIS replica
+		if p.ReplicaID == s.replicaID {
+			s.clientsMu.RLock()
+			_, isConnectedLocally := s.clients[id]
+			s.clientsMu.RUnlock()
+
+			if !isConnectedLocally {
+				log.Printf("🧹 Removing disconnected participant %s during reset", id)
+				delete(room.Participants, id)
+			}
+		}
 	}
+
 	room.History = []HistoryRound{}
 	room.Story = nil
 	participants := s.getParticipantsArray(room)
@@ -525,6 +810,7 @@ func (s *Server) handleReset(ws *ExtendedWebSocket, data map[string]interface{})
 		"history":      []HistoryRound{},
 	}
 	s.broadcastToRoom(roomID, "room-reset", roomReset)
+	s.saveRoomState(roomID)
 }
 
 func (s *Server) handleUpdateStory(ws *ExtendedWebSocket, data map[string]interface{}) {
@@ -558,6 +844,7 @@ func (s *Server) handleUpdateStory(ws *ExtendedWebSocket, data map[string]interf
 		"story": story,
 	}
 	s.broadcastToRoom(roomID, "story-updated", storyUpdated)
+	s.saveRoomState(roomID)
 }
 
 func (s *Server) handleSuspendVoting(ws *ExtendedWebSocket, data map[string]interface{}) {
@@ -577,6 +864,7 @@ func (s *Server) handleSuspendVoting(ws *ExtendedWebSocket, data map[string]inte
 	}
 	room.mu.Unlock()
 	s.broadcastRoomState(roomID)
+	s.saveRoomState(roomID)
 }
 
 func (s *Server) handleResumeVoting(ws *ExtendedWebSocket, data map[string]interface{}) {
@@ -597,6 +885,7 @@ func (s *Server) handleResumeVoting(ws *ExtendedWebSocket, data map[string]inter
 	}
 	room.mu.Unlock()
 	s.broadcastRoomState(roomID)
+	s.saveRoomState(roomID)
 }
 
 func (s *Server) handleClientDisconnect(ws *ExtendedWebSocket) {
@@ -606,21 +895,32 @@ func (s *Server) handleClientDisconnect(ws *ExtendedWebSocket) {
 	delete(s.clients, ws.ID)
 	s.clientsMu.Unlock()
 
-	// Note: We intentionally DO NOT remove participants from rooms on disconnect
-	// This allows their votes to persist when they reconnect (e.g., after page refresh)
-	// Participants are only removed when the game is explicitly reset
-	// The participant will be updated with new ID when they rejoin with same name
 	if ws.RoomID != "" {
 		s.roomsMu.RLock()
 		room, exists := s.rooms[ws.RoomID]
 		s.roomsMu.RUnlock()
 
 		if exists {
-			room.mu.RLock()
-			if _, ok := room.Participants[ws.ID]; ok {
-				log.Printf("🔄 Keeping participant data for potential reconnection: %s", ws.ID)
+			room.mu.Lock()
+			if participant, ok := room.Participants[ws.ID]; ok {
+				// Only manage if this participant belongs to this replica
+				if participant.ReplicaID == s.replicaID {
+					log.Printf("🔄 Participant %s disconnected from room %s", ws.ID, ws.RoomID)
+					participant.Connected = false
+					participant.LastSeen = time.Now().UnixMilli()
+
+					// If they haven't voted and aren't paused, remove them immediately
+					if (participant.Vote == nil || *participant.Vote == "") && !participant.Paused {
+						log.Printf("🧹 Removing inactive participant %s from room %s", ws.ID, ws.RoomID)
+						delete(room.Participants, ws.ID)
+					}
+				}
 			}
-			room.mu.RUnlock()
+			room.mu.Unlock()
+
+			// Broadcast the updated state (including the disconnected/removed status)
+			s.broadcastRoomState(ws.RoomID)
+			s.saveRoomState(ws.RoomID)
 		}
 	}
 }
@@ -650,7 +950,7 @@ func (s *Server) handleUpdateName(ws *ExtendedWebSocket, data map[string]interfa
 			s.clientsMu.RLock()
 			for _, p := range room.Participants {
 				// Only check if participant is still connected
-				if p.ID != ws.ID && p.Name == finalName && s.clients[p.ID] != nil {
+				if p.ID != ws.ID && p.Name == finalName && (p.Connected || s.clients[p.ID] != nil) {
 					nameExists = true
 					break
 				}
@@ -671,8 +971,8 @@ func (s *Server) handleUpdateName(ws *ExtendedWebSocket, data map[string]interfa
 		participant.Name = finalName
 	}
 	room.mu.Unlock()
-
 	s.broadcastRoomState(roomID)
+	s.saveRoomState(roomID)
 }
 
 func (s *Server) handleToggleAutoReveal(ws *ExtendedWebSocket, data map[string]interface{}) {
@@ -691,8 +991,8 @@ func (s *Server) handleToggleAutoReveal(ws *ExtendedWebSocket, data map[string]i
 	room.AutoReveal = autoReveal
 	room.mu.Unlock()
 
-	log.Printf("📥 toggle-auto-reveal received: roomId=%s, autoReveal=%v", roomID, autoReveal)
 	s.broadcastToRoom(roomID, "auto-reveal-updated", map[string]interface{}{"autoReveal": autoReveal})
+	s.saveRoomState(roomID)
 }
 
 func (s *Server) handleStartTimer(ws *ExtendedWebSocket, data map[string]interface{}) {
@@ -719,6 +1019,7 @@ func (s *Server) handleStartTimer(ws *ExtendedWebSocket, data map[string]interfa
 
 	log.Printf("📥 start-timer received: roomId=%s, duration=%d, endTime=%d", roomID, duration, endTime)
 	s.broadcastToRoom(roomID, "timer-updated", map[string]interface{}{"timer": timer})
+	s.saveRoomState(roomID)
 }
 
 func (s *Server) handleStopTimer(ws *ExtendedWebSocket, data map[string]interface{}) {
@@ -736,8 +1037,8 @@ func (s *Server) handleStopTimer(ws *ExtendedWebSocket, data map[string]interfac
 	room.Timer = nil
 	room.mu.Unlock()
 
-	log.Printf("📥 stop-timer received: roomId=%s", roomID)
 	s.broadcastToRoom(roomID, "timer-updated", map[string]interface{}{"timer": nil})
+	s.saveRoomState(roomID)
 }
 
 func (s *Server) handleMessage(ws *ExtendedWebSocket, message WebSocketMessage) {
@@ -795,6 +1096,44 @@ func (s *Server) handleMessage(ws *ExtendedWebSocket, message WebSocketMessage) 
 	}
 }
 
+func (s *Server) handleGlobalParticipantMoved(participantId string, newRoomID string) {
+	s.roomsMu.RLock()
+	rooms := make([]*RoomState, 0, len(s.rooms))
+	for rID, room := range s.rooms {
+		if rID != newRoomID {
+			rooms = append(rooms, room)
+		}
+	}
+	s.roomsMu.RUnlock()
+
+	for _, room := range rooms {
+		room.mu.Lock()
+		removed := false
+		for id, p := range room.Participants {
+			if p.ParticipantId == participantId {
+				log.Printf("🧹 Global cleanup: Removing participant %s from room %s (moved to %s)", id, room.ID, newRoomID)
+				delete(room.Participants, id)
+				removed = true
+				
+				// If this connection was local to THIS instance, we should close it
+				s.clientsMu.RLock()
+				client, isLocal := s.clients[id]
+				s.clientsMu.RUnlock()
+				if isLocal && client != nil {
+					client.Close()
+				}
+			}
+		}
+		roomID := room.ID
+		room.mu.Unlock()
+
+		if removed {
+			s.broadcastRoomState(roomID)
+			s.saveRoomStateWithoutNotify(roomID)
+		}
+	}
+}
+
 func (s *Server) broadcastRoomState(roomID string) {
 	s.roomsMu.RLock()
 	room, exists := s.rooms[roomID]
@@ -815,13 +1154,27 @@ func (s *Server) broadcastRoomState(roomID string) {
 		"story":        room.Story,
 		"history":      room.History,
 	}
-	s.broadcastToRoom(roomID, "room-state", roomState)
+	s.emitToRoom(roomID, "room-state", roomState, "")
 }
 
 func (s *Server) getParticipantsArray(room *RoomState) []Participant {
 	participants := make([]Participant, 0, len(room.Participants))
+	s.clientsMu.RLock()
+	defer s.clientsMu.RUnlock()
+
 	for _, p := range room.Participants {
-		participants = append(participants, *p)
+		// Create a copy to avoid modifying the original
+		participant := *p
+
+		// Only update connection status for participants owned by THIS replica
+		if participant.ReplicaID == s.replicaID {
+			// This participant belongs to this replica - update based on local connection
+			_, isConnectedLocally := s.clients[participant.ID]
+			participant.Connected = isConnectedLocally
+		}
+		// For participants from other replicas, trust the stored Connected status
+
+		participants = append(participants, participant)
 	}
 	return participants
 }
@@ -844,7 +1197,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	s.clients[ws.ID] = ws
 	s.clientsMu.Unlock()
 
-	log.Printf("✅ Client connected: %s", ws.ID)
+	log.Printf("✅ Client connected: %s (replica: %s)", ws.ID, s.replicaID)
 
 	// Setup pong handler for heartbeat
 	ws.SetPongHandler(func(string) error {
@@ -904,7 +1257,7 @@ func (s *Server) Initialize() error {
 	// Start heartbeat mechanism
 	s.startHeartbeat()
 
-	log.Println("✓ WebSocket server initialized")
+	log.Printf("✓ WebSocket server initialized (Replica ID: %s)", s.replicaID)
 	return nil
 }
 

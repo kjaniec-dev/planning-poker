@@ -1,0 +1,58 @@
+services:
+  redis:
+    image: redis:8-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --protected-mode yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    read_only: true
+    tmpfs:
+      - /data
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production-standalone
+      args:
+        NEXT_PUBLIC_REALTIME_URL: "http://localhost:8080"
+    environment:
+      HOSTNAME: "0.0.0.0"
+      REALTIME_MODE: external
+    ports:
+      - "3000:3000"
+    depends_on:
+      - lb
+
+  # Scalable Golang WebSocket Server
+  ws:
+    build:
+#      context: ./servers/golang
+      context: ./servers/node
+      dockerfile: Dockerfile
+    environment:
+      PORT: 3001
+      REDIS_URL: "redis://redis:6379"
+      ALLOWED_ORIGINS: "http://localhost:3000"
+    depends_on:
+      - redis
+    deploy:
+      replicas: 3
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  # Simple Nginx Load Balancer to simulate distribution
+  lb:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx-lb.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - ws

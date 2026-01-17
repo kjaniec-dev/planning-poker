@@ -394,6 +394,24 @@ See [CLAUDE.md](./CLAUDE.md) for detailed protocol documentation.
    - `docs:` for documentation
 4. **Documentation**: Update CLAUDE.md for significant changes
 
+### Distributed Setup with Redis (3 instances)
+
+To test the system with multiple WebSocket instances and Redis (simulating a production environment):
+
+1. Start the distributed setup:
+   ```bash
+   docker compose -f docker-compose.distributed.yml up --build
+   ```
+
+2. Access the app at `http://localhost:3000`.
+
+3. The WebSocket connections will be load-balanced across multiple server instances (managed via `replicas: 3` in the compose file).
+
+4. You can verify the synchronization by:
+   - Joining a room from different browsers.
+   - Refreshing the page (you might hit a different server instance, but your state will be restored from Redis).
+   - Observing the logs to see different instances handling different clients while sharing the same room state.
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
