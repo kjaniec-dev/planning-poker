@@ -833,11 +833,6 @@ describe("WebSocket Server", () => {
     test("should send ping frames to clients", async () => {
       const ws = await createWSConnection();
 
-      let receivedPing = false;
-      ws.on("ping", () => {
-        receivedPing = true;
-      });
-
       // Wait for heartbeat interval (30 seconds) - but we'll test the mechanism
       // by checking that ping/pong infrastructure is in place
       // In real scenario, wait 30s to see actual ping
@@ -883,12 +878,6 @@ describe("WebSocket Server", () => {
 
       sendMessage(ws, "join-room", { roomId, name: "Alice" });
       await waitForMessage(ws);
-
-      // Store reference to connection to verify it closes
-      let closedConnection = false;
-      ws.on("close", () => {
-        closedConnection = true;
-      });
 
       // Override pong handler to simulate non-responsive client
       ws.removeAllListeners("pong");
