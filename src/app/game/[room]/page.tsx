@@ -48,6 +48,7 @@ export default function GameRoomPage() {
 
   const [currentName, setCurrentName] = useState("");
   const [mounted, setMounted] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -190,6 +191,8 @@ export default function GameRoomPage() {
 
     try {
       await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
     } catch (error) {
       console.error("Failed to copy:", error);
     }
@@ -242,11 +245,22 @@ export default function GameRoomPage() {
                             onClick={copyGameUrl}
                             className="flex items-center gap-2"
                           >
-                            <Copy className="h-4 w-4" />
-                            <span>Copy Link</span>
+                            {linkCopied ? (
+                              <>
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy className="h-4 w-4" />
+                                <span>Copy Link</span>
+                              </>
+                            )}
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>Copy room link</TooltipContent>
+                        <TooltipContent>
+                          {linkCopied ? "Link copied!" : "Copy room link"}
+                        </TooltipContent>
                       </Tooltip>
                     </div>
                   </div>
@@ -391,8 +405,17 @@ export default function GameRoomPage() {
                             onClick={copyGameUrl}
                             className="flex items-center gap-2 w-full sm:w-auto sm:self-start"
                           >
-                            <Link className="h-4 w-4" />
-                            <span>Copy URL</span>
+                            {linkCopied ? (
+                              <>
+                                <CheckCircle className="h-4 w-4 text-green-600" />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Link className="h-4 w-4" />
+                                <span>Copy URL</span>
+                              </>
+                            )}
                           </Button>
                         </div>
 
