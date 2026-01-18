@@ -48,7 +48,12 @@ function notifyListeners(message: WSMessage) {
 
 function doJoinIfNeeded() {
   if (socket && socket.readyState === WebSocket.OPEN && lastJoin) {
-    console.log("📤 [wsClient] Sending join-room for:", lastJoin.roomId, "name:", lastJoin.name);
+    console.log(
+      "📤 [wsClient] Sending join-room for:",
+      lastJoin.roomId,
+      "name:",
+      lastJoin.name,
+    );
     const joinMessage = {
       type: "join-room",
       data: {
@@ -129,11 +134,19 @@ export function joinRoom(roomId: string, name: string) {
   const oldLastJoin = lastJoin;
   lastJoin = { roomId, name, participantId };
 
-  console.log("📍 [wsClient] joinRoom called:", { roomId, name, participantId });
-  
+  console.log("📍 [wsClient] joinRoom called:", {
+    roomId,
+    name,
+    participantId,
+  });
+
   // If we were already connected but to a different room, we should trigger join immediately
   if (socket && socket.readyState === WebSocket.OPEN) {
-    if (!oldLastJoin || oldLastJoin.roomId !== roomId || oldLastJoin.name !== name) {
+    if (
+      !oldLastJoin ||
+      oldLastJoin.roomId !== roomId ||
+      oldLastJoin.name !== name
+    ) {
       doJoinIfNeeded();
     }
   } else {

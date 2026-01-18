@@ -534,7 +534,7 @@ describe("WebSocket Server", () => {
       });
     });
 
-    test("should keep participant data on disconnect", async () => {
+    test("should keep participant data on disconnect when they have voted", async () => {
       const ws1 = await createWSConnection();
       const ws2 = await createWSConnection();
       const roomId = "test-room";
@@ -546,6 +546,10 @@ describe("WebSocket Server", () => {
       sendMessage(ws2, "join-room", { roomId, name: "Bob" });
       await waitForMessage(ws2); // Bob's room-state
 
+      // Alice votes (so she'll be kept after disconnect)
+      sendMessage(ws1, "vote", { roomId, vote: "5" });
+      await waitForMessage(ws1); // participant-voted
+
       // Verify both are in the room
       let room = getOrCreateRoom(roomId);
       expect(room.participants.size).toBe(2);
@@ -556,13 +560,15 @@ describe("WebSocket Server", () => {
       // Wait for disconnect handler
       await new Promise((resolve) => setTimeout(resolve, 200));
 
-      // Verify Alice is still in the room (data persisted for reconnection)
+      // Verify Alice is still in the room (data persisted for reconnection because she voted)
       room = getOrCreateRoom(roomId);
       expect(room.participants.size).toBe(2);
       const aliceStillThere = Array.from(room.participants.values()).find(
         (p) => p.name === "Alice",
       );
       expect(aliceStillThere).toBeDefined();
+      expect(aliceStillThere?.connected).toBe(false);
+      expect(aliceStillThere?.vote).toBe("5");
 
       ws2.close();
     });
@@ -656,10 +662,10 @@ describe("WebSocket Server", () => {
       ws2.close();
     });
 
-    test("should allow name change to disconnected participant's name", async () => {
+    test("should allow name change after inactive participant removed", async () => {
       const roomId = "test-room";
 
-      // First user joins with name "KJ2"
+      // First user joins with name "KJ2" but doesn't vote
       const ws1 = await createWSConnection();
       sendMessage(ws1, "join-room", { roomId, name: "KJ2" });
       await waitForMessage(ws1);
@@ -668,13 +674,13 @@ describe("WebSocket Server", () => {
       let room = getOrCreateRoom(roomId);
       expect(room.participants.size).toBe(1);
 
-      // KJ2 disconnects (but data persists for reconnection)
+      // KJ2 disconnects without voting (will be removed immediately in distributed mode)
       ws1.close();
       await new Promise((resolve) => setTimeout(resolve, 200));
 
-      // Verify KJ2 is still in room data but disconnected
+      // Verify KJ2 was removed (distributed behavior: inactive participants are cleaned up)
       room = getOrCreateRoom(roomId);
-      expect(room.participants.size).toBe(1);
+      expect(room.participants.size).toBe(0);
 
       // New guest joins
       const ws2 = await createWSConnection();
@@ -682,7 +688,7 @@ describe("WebSocket Server", () => {
       await waitForMessage(ws2);
 
       // Guest changes name to "KJ2" - should succeed without " 2" suffix
-      // because the original KJ2 is disconnected
+      // because the original KJ2 was removed
       sendMessage(ws2, "update-name", { roomId, name: "KJ2" });
       const updateMessage = await waitForMessage(ws2);
 
@@ -690,10 +696,8 @@ describe("WebSocket Server", () => {
       expect(updateMessage.type).toBe("room-state");
       const updatedRoom = getOrCreateRoom(roomId);
       const participants = Array.from(updatedRoom.participants.values());
-      const activeParticipant = participants.find(
-        (p) => p.name === "KJ2" || p.name === "KJ2 2",
-      );
-      expect(activeParticipant?.name).toBe("KJ2");
+      expect(participants).toHaveLength(1);
+      expect(participants[0].name).toBe("KJ2");
 
       ws2.close();
     });

@@ -30,8 +30,8 @@ services:
   # Scalable Golang WebSocket Server
   ws:
     build:
-#      context: ./servers/golang
-      context: ./servers/node
+      context: ./servers/golang
+#      context: ./servers/node
       dockerfile: Dockerfile
     environment:
       PORT: 3001

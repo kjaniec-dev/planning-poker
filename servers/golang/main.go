@@ -589,16 +589,15 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 			LastSeen:      time.Now().UnixMilli(),
 			ReplicaID:     s.replicaID,
 		}
-	} else if existingParticipant != nil {
-		// Duplicate name from an active connection - generate unique name
-		// Only check connected participants to avoid conflicts with disconnected users
+	} else {
+		// New participant - check for duplicate names from active connections
 		uniqueName := name
 		counter := 2
 
 		// Find a unique name by appending numbers
+		s.clientsMu.RLock()
 		for {
 			nameExists := false
-			s.clientsMu.RLock()
 			for _, p := range room.Participants {
 				// Only check if participant is still connected
 				if p.Name == uniqueName && (p.Connected || s.clients[p.ID] != nil) {
@@ -606,31 +605,22 @@ func (s *Server) handleJoinRoom(ws *ExtendedWebSocket, data map[string]interface
 					break
 				}
 			}
-			s.clientsMu.RUnlock()
 			if !nameExists {
 				break
 			}
 			uniqueName = name + " " + strconv.Itoa(counter)
 			counter++
 		}
+		s.clientsMu.RUnlock()
 
-		log.Printf("⚠️ Duplicate name detected. Renaming %s to %s for client %s", name, uniqueName, ws.ID)
+		if uniqueName != name {
+			log.Printf("⚠️ Duplicate name detected. Renaming %s to %s for client %s", name, uniqueName, ws.ID)
+		}
 
 		// Create new participant with unique name
 		room.Participants[ws.ID] = &Participant{
 			ID:            ws.ID,
 			Name:          uniqueName,
-			Vote:          nil,
-			ParticipantId: participantId,
-			Connected:     true,
-			LastSeen:      time.Now().UnixMilli(),
-			ReplicaID:     s.replicaID,
-		}
-	} else {
-		// New participant
-		room.Participants[ws.ID] = &Participant{
-			ID:            ws.ID,
-			Name:          name,
 			Vote:          nil,
 			ParticipantId: participantId,
 			Connected:     true,

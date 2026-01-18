@@ -435,10 +435,33 @@ function handleJoinRoom(
       replicaId,
     });
   } else {
-    // New participant
+    // New participant - check for duplicate names from active connections
+    let uniqueName = name;
+    let counter = 2;
+
+    // Find a unique name by appending numbers
+    while (
+      Array.from(room.participants.values()).some(
+        (p) => p.name === uniqueName && clients.has(p.id),
+      )
+    ) {
+      uniqueName = `${name} ${counter}`;
+      counter++;
+    }
+
+    if (uniqueName !== name) {
+      console.log(
+        "⚠️ Duplicate name detected. Renaming %s to %s for client %s",
+        name,
+        uniqueName,
+        ws.id,
+      );
+    }
+
+    // Create new participant with unique name
     room.participants.set(ws.id, {
       id: ws.id,
-      name,
+      name: uniqueName,
       vote: null,
       participantId,
       connected: true,
@@ -536,7 +559,9 @@ function handleReestimate(_ws: ExtendedWebSocket, data: { roomId: string }) {
 
     // Only remove disconnected participants that belong to THIS replica
     if (p.replicaId === replicaId && !clients.has(id)) {
-      console.log(`🧹 Removing disconnected participant ${id} during re-estimate`);
+      console.log(
+        `🧹 Removing disconnected participant ${id} during re-estimate`,
+      );
       room.participants.delete(id);
     }
   }
@@ -639,13 +664,17 @@ function handleDisconnect(ws: ExtendedWebSocket) {
     if (room) {
       const participant = room.participants.get(ws.id);
       if (participant && participant.replicaId === replicaId) {
-        console.log(`🔄 Participant ${ws.id} disconnected from room ${ws.roomId}`);
+        console.log(
+          `🔄 Participant ${ws.id} disconnected from room ${ws.roomId}`,
+        );
         participant.connected = false;
         participant.lastSeen = Date.now();
 
         // If they haven't voted and aren't paused, remove them immediately
         if (!participant.vote && !participant.paused) {
-          console.log(`🧹 Removing inactive participant ${ws.id} from room ${ws.roomId}`);
+          console.log(
+            `🧹 Removing inactive participant ${ws.id} from room ${ws.roomId}`,
+          );
           room.participants.delete(ws.id);
         }
 
@@ -693,8 +722,14 @@ function cleanupStaleParticipants() {
       }
 
       // If disconnected for too long, remove them
-      if (!participant.connected && participant.lastSeen > 0 && (now - participant.lastSeen) > staleTimeout) {
-        console.log(`🧹 Removing stale participant ${id} from room ${roomId} (offline for ${now - participant.lastSeen}ms)`);
+      if (
+        !participant.connected &&
+        participant.lastSeen > 0 &&
+        now - participant.lastSeen > staleTimeout
+      ) {
+        console.log(
+          `🧹 Removing stale participant ${id} from room ${roomId} (offline for ${now - participant.lastSeen}ms)`,
+        );
         room.participants.delete(id);
         removed = true;
       }

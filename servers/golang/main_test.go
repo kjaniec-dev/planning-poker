@@ -751,6 +751,13 @@ func TestClientDisconnect(t *testing.T) {
 	})
 	readMessage(t, ws, 2*time.Second) // room-state
 
+	// Vote so participant is kept after disconnect (distributed behavior)
+	sendMessage(t, ws, "vote", map[string]interface{}{
+		"roomId": roomID,
+		"vote":   "5",
+	})
+	readMessage(t, ws, 2*time.Second) // participant-voted
+
 	// Get client ID before closing
 	server.clientsMu.RLock()
 	clientCount := len(server.clients)
@@ -775,7 +782,7 @@ func TestClientDisconnect(t *testing.T) {
 		t.Errorf("Expected 0 clients after disconnect, got %d", clientCount)
 	}
 
-	// Verify participant data is kept for potential reconnection
+	// Verify participant data is kept for reconnection (because they voted)
 	server.roomsMu.RLock()
 	room := server.rooms[roomID]
 	server.roomsMu.RUnlock()
@@ -783,9 +790,19 @@ func TestClientDisconnect(t *testing.T) {
 	room.mu.RLock()
 	defer room.mu.RUnlock()
 
-	// Participant should still be in room for reconnection support
+	// Participant with vote should be kept for reconnection support
 	if len(room.Participants) != 1 {
-		t.Errorf("Expected 1 participant (kept for reconnection) after disconnect, got %d", len(room.Participants))
+		t.Errorf("Expected 1 participant (kept for reconnection because they voted) after disconnect, got %d", len(room.Participants))
+	}
+
+	// Verify participant is marked as disconnected but still has their vote
+	for _, p := range room.Participants {
+		if p.Connected {
+			t.Errorf("Expected participant to be marked as disconnected")
+		}
+		if p.Vote == nil || *p.Vote != "5" {
+			t.Errorf("Expected participant to retain their vote '5', got %v", p.Vote)
+		}
 	}
 }
 
