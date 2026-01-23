@@ -352,6 +352,7 @@ export default function GameRoomPage() {
                       revealed={revealed}
                       onReveal={handleReveal}
                       canReveal={!!selection}
+                      isPaused={isPaused}
                       previousRound={history[history.length - 1] ?? undefined}
                     />
                   </TabsContent>
@@ -433,6 +434,7 @@ export default function GameRoomPage() {
                               <Button
                                 size="sm"
                                 variant="outline"
+                                disabled={isPaused}
                                 className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive hover:text-white w-full sm:w-auto sm:self-start"
                               >
                                 <RotateCcw className="h-4 w-4" />
