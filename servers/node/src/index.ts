@@ -187,6 +187,21 @@ function emitToRoom(
   }
 }
 
+function deleteRoomIfEmpty(roomId: string) {
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  // Check if there are any connected participants
+  const hasConnectedParticipants = Array.from(room.participants.values()).some(
+    (p) => p.connected && clients.has(p.id),
+  );
+
+  if (!hasConnectedParticipants) {
+    console.log(`🧹 Deleting empty room: ${roomId}`);
+    rooms.delete(roomId);
+  }
+}
+
 export function initWebSocketServer(httpServer: HTTPServer) {
   if (wss) return wss;
 
@@ -566,6 +581,9 @@ function handleReestimate(_ws: ExtendedWebSocket, data: { roomId: string }) {
     }
   }
 
+  // Delete room if empty
+  deleteRoomIfEmpty(roomId);
+
   emitToRoom(roomId, "room-state", {
     participants: getParticipantsArray(room),
     revealed: room.revealed,
@@ -596,6 +614,9 @@ function handleReset(_ws: ExtendedWebSocket, data: { roomId: string }) {
 
   room.history = [];
   room.story = null;
+
+  // Delete room if empty
+  deleteRoomIfEmpty(roomId);
 
   emitToRoom(roomId, "room-reset", {
     participants: getParticipantsArray(room),
@@ -678,6 +699,9 @@ function handleDisconnect(ws: ExtendedWebSocket) {
           room.participants.delete(ws.id);
         }
 
+        // Delete room if empty
+        deleteRoomIfEmpty(ws.roomId);
+
         // Broadcast the updated state
         const roomState = {
           participants: getParticipantsArray(room),
@@ -736,6 +760,9 @@ function cleanupStaleParticipants() {
     }
 
     if (removed) {
+      // Delete room if empty
+      deleteRoomIfEmpty(roomId);
+
       const roomState = {
         participants: getParticipantsArray(room),
         revealed: room.revealed,

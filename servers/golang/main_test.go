@@ -787,27 +787,13 @@ func TestClientDisconnect(t *testing.T) {
 		t.Errorf("Expected 0 clients after disconnect, got %d", clientCount)
 	}
 
-	// Verify participant data is kept for reconnection (because they voted)
+	// Verify room is deleted when all participants disconnect
 	server.roomsMu.RLock()
-	room := server.rooms[roomID]
+	_, roomExists := server.rooms[roomID]
 	server.roomsMu.RUnlock()
 
-	room.mu.RLock()
-	defer room.mu.RUnlock()
-
-	// Participant with vote should be kept for reconnection support
-	if len(room.Participants) != 1 {
-		t.Errorf("Expected 1 participant (kept for reconnection because they voted) after disconnect, got %d", len(room.Participants))
-	}
-
-	// Verify participant is marked as disconnected but still has their vote
-	for _, p := range room.Participants {
-		if p.Connected {
-			t.Errorf("Expected participant to be marked as disconnected")
-		}
-		if p.Vote == nil || *p.Vote != "5" {
-			t.Errorf("Expected participant to retain their vote '5', got %v", p.Vote)
-		}
+	if roomExists {
+		t.Error("Expected room to be deleted when all participants disconnected")
 	}
 }
 
@@ -1282,5 +1268,135 @@ func TestRemoveInactiveParticipants(t *testing.T) {
 	}
 	if participant.Vote != nil {
 		t.Error("Inactive participant should have no vote")
+	}
+}
+
+func TestDeleteRoomWhenEmpty(t *testing.T) {
+	s := NewServer()
+	s.replicaID = "test-replica"
+
+	roomID := "test-room-cleanup"
+
+	// Create a room with two participants
+	room := s.getOrCreateRoom(roomID)
+
+	// Add two participants (both inactive - no votes)
+	participant1ID := "participant1"
+	participant2ID := "participant2"
+
+	room.mu.Lock()
+	room.Participants[participant1ID] = &Participant{
+		ID:        participant1ID,
+		Name:      "Alice",
+		Vote:      nil,
+		Connected: false,
+		LastSeen:  time.Now().UnixMilli(),
+		ReplicaID: s.replicaID,
+	}
+	room.Participants[participant2ID] = &Participant{
+		ID:        participant2ID,
+		Name:      "Bob",
+		Vote:      nil,
+		Connected: false,
+		LastSeen:  time.Now().UnixMilli(),
+		ReplicaID: s.replicaID,
+	}
+	room.mu.Unlock()
+
+	// Verify room has 2 participants
+	room.mu.RLock()
+	participantCount := len(room.Participants)
+	room.mu.RUnlock()
+	if participantCount != 2 {
+		t.Fatalf("Expected 2 participants, got %d", participantCount)
+	}
+
+	// Verify room exists
+	s.roomsMu.RLock()
+	_, roomExists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+	if !roomExists {
+		t.Fatal("Room should exist before cleanup")
+	}
+
+	// Remove all participants to make room empty
+	room.mu.Lock()
+	delete(room.Participants, participant1ID)
+	delete(room.Participants, participant2ID)
+	room.mu.Unlock()
+
+	// Call deleteRoomIfEmpty to test the cleanup logic
+	s.deleteRoomIfEmpty(roomID)
+
+	// After cleanup, room should be deleted from server.rooms
+	s.roomsMu.RLock()
+	_, roomExists = s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if roomExists {
+		t.Error("Room should be deleted after all participants are removed")
+	}
+}
+
+func TestDeleteRoomWithPausedParticipants(t *testing.T) {
+	s := NewServer()
+	s.replicaID = "test-replica"
+
+	roomID := "test-room-paused-cleanup"
+
+	// Create a room with two participants
+	room := s.getOrCreateRoom(roomID)
+
+	// Add two participants: one with a vote, one paused
+	participant1ID := "participant1"
+	participant2ID := "participant2"
+
+	vote := "5"
+	room.mu.Lock()
+	room.Participants[participant1ID] = &Participant{
+		ID:        participant1ID,
+		Name:      "Alice",
+		Vote:      &vote,
+		Connected: false, // Disconnected but has a vote
+		LastSeen:  time.Now().UnixMilli(),
+		ReplicaID: s.replicaID,
+	}
+	room.Participants[participant2ID] = &Participant{
+		ID:        participant2ID,
+		Name:      "Bob",
+		Vote:      nil,
+		Paused:    true, // Paused participant
+		Connected: false,
+		LastSeen:  time.Now().UnixMilli(),
+		ReplicaID: s.replicaID,
+	}
+	room.mu.Unlock()
+
+	// Verify room has 2 participants
+	room.mu.RLock()
+	participantCount := len(room.Participants)
+	room.mu.RUnlock()
+	if participantCount != 2 {
+		t.Fatalf("Expected 2 participants, got %d", participantCount)
+	}
+
+	// Verify room exists
+	s.roomsMu.RLock()
+	_, roomExists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+	if !roomExists {
+		t.Fatal("Room should exist before cleanup")
+	}
+
+	// Call deleteRoomIfEmpty - room should be deleted since all participants are disconnected
+	s.deleteRoomIfEmpty(roomID)
+
+	// After cleanup, room should be deleted even though participants have votes/are paused
+	s.roomsMu.RLock()
+	_, roomExists = s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if roomExists {
+		t.Error("Room should be deleted when all participants are disconnected, even if paused or have votes")
 	}
 }

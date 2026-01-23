@@ -365,6 +365,31 @@ func (s *Server) emitToRoom(roomID string, msgType string, data interface{}, exc
 	}
 }
 
+func (s *Server) deleteRoomIfEmpty(roomID string) {
+	s.roomsMu.Lock()
+	defer s.roomsMu.Unlock()
+
+	if room, exists := s.rooms[roomID]; exists {
+		room.mu.RLock()
+		// Check if there are any connected participants
+		hasConnectedParticipants := false
+		s.clientsMu.RLock()
+		for _, participant := range room.Participants {
+			if participant.Connected && s.clients[participant.ID] != nil {
+				hasConnectedParticipants = true
+				break
+			}
+		}
+		s.clientsMu.RUnlock()
+		room.mu.RUnlock()
+
+		if !hasConnectedParticipants {
+			log.Printf("🧹 Deleting empty room: %s", roomID)
+			delete(s.rooms, roomID)
+		}
+	}
+}
+
 func (s *Server) startHeartbeat() {
 	s.heartbeat = time.NewTicker(30 * time.Second)
 	cleanupTicker := time.NewTicker(1 * time.Minute)
@@ -444,6 +469,9 @@ func (s *Server) cleanupStaleParticipants() {
 		room.mu.Unlock()
 
 		if removed {
+			// Delete room if empty
+			s.deleteRoomIfEmpty(roomID)
+
 			s.broadcastRoomState(roomID)
 			s.saveRoomStateWithoutNotify(roomID)
 		}
@@ -753,6 +781,10 @@ func (s *Server) handleReestimate(ws *ExtendedWebSocket, data map[string]interfa
 		}
 	}
 	room.mu.Unlock()
+
+	// Delete room if empty
+	s.deleteRoomIfEmpty(roomID)
+
 	s.broadcastRoomState(roomID)
 	s.saveRoomState(roomID)
 }
@@ -793,6 +825,9 @@ func (s *Server) handleReset(ws *ExtendedWebSocket, data map[string]interface{})
 	room.Story = nil
 	participants := s.getParticipantsArray(room)
 	room.mu.Unlock()
+
+	// Delete room if empty
+	s.deleteRoomIfEmpty(roomID)
 
 	roomReset := map[string]interface{}{
 		"participants": participants,
@@ -907,6 +942,9 @@ func (s *Server) handleClientDisconnect(ws *ExtendedWebSocket) {
 				}
 			}
 			room.mu.Unlock()
+
+			// Delete room if empty
+			s.deleteRoomIfEmpty(ws.RoomID)
 
 			// Broadcast the updated state (including the disconnected/removed status)
 			s.broadcastRoomState(ws.RoomID)
