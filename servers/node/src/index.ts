@@ -189,7 +189,14 @@ function emitToRoom(
 
 function deleteRoomIfEmpty(roomId: string) {
   const room = rooms.get(roomId);
-  if (room && room.participants.size === 0) {
+  if (!room) return;
+
+  // Check if there are any connected participants
+  const hasConnectedParticipants = Array.from(room.participants.values()).some(
+    (p) => p.connected && clients.has(p.id),
+  );
+
+  if (!hasConnectedParticipants) {
     console.log(`🧹 Deleting empty room: ${roomId}`);
     rooms.delete(roomId);
   }

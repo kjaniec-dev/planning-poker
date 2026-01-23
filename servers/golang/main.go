@@ -371,10 +371,19 @@ func (s *Server) deleteRoomIfEmpty(roomID string) {
 
 	if room, exists := s.rooms[roomID]; exists {
 		room.mu.RLock()
-		participantCount := len(room.Participants)
+		// Check if there are any connected participants
+		hasConnectedParticipants := false
+		s.clientsMu.RLock()
+		for _, participant := range room.Participants {
+			if participant.Connected && s.clients[participant.ID] != nil {
+				hasConnectedParticipants = true
+				break
+			}
+		}
+		s.clientsMu.RUnlock()
 		room.mu.RUnlock()
 
-		if participantCount == 0 {
+		if !hasConnectedParticipants {
 			log.Printf("🧹 Deleting empty room: %s", roomID)
 			delete(s.rooms, roomID)
 		}
