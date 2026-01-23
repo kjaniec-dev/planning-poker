@@ -10,8 +10,13 @@ let redisSub: Redis | null = null;
 function getAllowedOrigins(): string[] {
   const originsEnv = process.env.ALLOWED_ORIGINS;
   if (!originsEnv) {
-    // Default to localhost for development
-    return ["http://localhost:3000", "https://localhost:3000"];
+    // Default to localhost and 0.0.0.0 for development
+    return [
+      "http://localhost:3000",
+      "https://localhost:3000",
+      "http://0.0.0.0:3000",
+      "https://0.0.0.0:3000",
+    ];
   }
 
   return originsEnv
