@@ -98,6 +98,12 @@ service:
   port: 3000
   # Target port on the container
   targetPort: 3000
+  # Session affinity configuration
+  # Recommended: Enable for WebSocket connections to maintain room state on same pod
+  sessionAffinity:
+    enabled: true
+    # Session timeout in seconds (default: 3 hours)
+    timeoutSeconds: 10800
 
 # Ingress configuration
 ingress:
@@ -105,7 +111,11 @@ ingress:
   className: ""
   annotations: {}
     # cert-manager.io/cluster-issuer: letsencrypt-prod
+    # For NGINX Ingress Controller - enable WebSocket support and sticky sessions
     # nginx.ingress.kubernetes.io/websocket-services: planning-poker
+    # nginx.ingress.kubernetes.io/affinity: "cookie"
+    # nginx.ingress.kubernetes.io/session-cookie-name: "route"
+    # nginx.ingress.kubernetes.io/session-cookie-hash: "sha1"
   hosts:
     - host: planning-poker.example.com
       paths:
