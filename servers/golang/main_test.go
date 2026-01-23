@@ -1284,3 +1284,70 @@ func TestRemoveInactiveParticipants(t *testing.T) {
 		t.Error("Inactive participant should have no vote")
 	}
 }
+
+func TestDeleteRoomWhenEmpty(t *testing.T) {
+	s := NewServer()
+	s.replicaID = "test-replica"
+
+	roomID := "test-room-cleanup"
+
+	// Create a room with two participants
+	room := s.getOrCreateRoom(roomID)
+
+	// Add two participants (both inactive - no votes)
+	participant1ID := "participant1"
+	participant2ID := "participant2"
+
+	room.mu.Lock()
+	room.Participants[participant1ID] = &Participant{
+		ID:        participant1ID,
+		Name:      "Alice",
+		Vote:      nil,
+		Connected: false,
+		LastSeen:  time.Now().UnixMilli(),
+		ReplicaID: s.replicaID,
+	}
+	room.Participants[participant2ID] = &Participant{
+		ID:        participant2ID,
+		Name:      "Bob",
+		Vote:      nil,
+		Connected: false,
+		LastSeen:  time.Now().UnixMilli(),
+		ReplicaID: s.replicaID,
+	}
+	room.mu.Unlock()
+
+	// Verify room has 2 participants
+	room.mu.RLock()
+	participantCount := len(room.Participants)
+	room.mu.RUnlock()
+	if participantCount != 2 {
+		t.Fatalf("Expected 2 participants, got %d", participantCount)
+	}
+
+	// Verify room exists
+	s.roomsMu.RLock()
+	_, roomExists := s.rooms[roomID]
+	s.roomsMu.RUnlock()
+	if !roomExists {
+		t.Fatal("Room should exist before cleanup")
+	}
+
+	// Remove all participants to make room empty
+	room.mu.Lock()
+	delete(room.Participants, participant1ID)
+	delete(room.Participants, participant2ID)
+	room.mu.Unlock()
+
+	// Call deleteRoomIfEmpty to test the cleanup logic
+	s.deleteRoomIfEmpty(roomID)
+
+	// After cleanup, room should be deleted from server.rooms
+	s.roomsMu.RLock()
+	_, roomExists = s.rooms[roomID]
+	s.roomsMu.RUnlock()
+
+	if roomExists {
+		t.Error("Room should be deleted after all participants are removed")
+	}
+}

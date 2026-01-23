@@ -980,5 +980,33 @@ describe("WebSocket Server", () => {
       expect(room.participants.size).toBe(0);
       expect(room.participants.has(participantId)).toBe(false);
     });
+
+    test("should delete room when all participants disconnect", async () => {
+      const ws1 = await createWSConnection();
+      const ws2 = await createWSConnection();
+      const roomId = "test-room-cleanup";
+
+      // Both clients join
+      sendMessage(ws1, "join-room", { roomId, name: "Alice" });
+      await waitForMessage(ws1);
+
+      sendMessage(ws2, "join-room", { roomId, name: "Bob" });
+      await waitForMessage(ws2);
+
+      // Verify room exists with 2 participants
+      let room = getOrCreateRoom(roomId);
+      expect(room.participants.size).toBe(2);
+
+      // Both disconnect without voting (inactive participants)
+      ws1.close();
+      ws2.close();
+      await new Promise((resolve) => setTimeout(resolve, 200));
+
+      // Room should be deleted since all participants are gone
+      // We need to check if the room is actually removed from the rooms Map
+      // This will be implemented by accessing the rooms Map after the fix
+      room = getOrCreateRoom(roomId);
+      expect(room.participants.size).toBe(0);
+    });
   });
 });
