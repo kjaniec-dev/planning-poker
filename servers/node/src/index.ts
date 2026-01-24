@@ -93,9 +93,24 @@ const clients = new Map<string, ExtendedWebSocket>();
 // Generate unique replica ID from hostname or random value
 const replicaId = process.env.HOSTNAME || generateId();
 
-export function getOrCreateRoom(roomId: string): RoomState {
-  if (!rooms.has(roomId)) {
-    rooms.set(roomId, {
+export async function getOrCreateRoom(roomId: string): Promise<RoomState> {
+  let room = rooms.get(roomId);
+
+  if (!room && redisPub) {
+    // Try to load from Redis first
+    const loaded = await loadRoomState(roomId);
+    if (loaded) {
+      rooms.set(roomId, loaded);
+      room = loaded;
+      console.log(
+        `📦 Room ${roomId} loaded from Redis with ${loaded.participants.size} participants`,
+      );
+    }
+  }
+
+  if (!room) {
+    // Create new room if not in memory or Redis
+    room = {
       id: roomId,
       participants: new Map(),
       revealed: false,
@@ -103,12 +118,11 @@ export function getOrCreateRoom(roomId: string): RoomState {
       timer: null,
       story: null,
       history: [],
-    });
+    };
+    rooms.set(roomId, room);
+    console.log(`📝 Created new room: ${roomId}`);
   }
-  const room = rooms.get(roomId);
-  if (!room) {
-    throw new Error(`Room ${roomId} not found after creation`);
-  }
+
   return room;
 }
 
@@ -150,7 +164,33 @@ function setupRedisSubscription() {
   redisSub.on("message", (_channel: string, message: string) => {
     try {
       const { type, roomId, data, excludeId } = JSON.parse(message);
-      broadcastToRoom(roomId, type, data, excludeId);
+
+      // Handle room-updated message specially - reload from Redis
+      if (type === "room-updated") {
+        loadRoomState(roomId)
+          .then((loaded) => {
+            if (loaded) {
+              rooms.set(roomId, loaded);
+              console.log(`📦 Reloaded room ${roomId} from Redis after update`);
+
+              // Broadcast updated state to local clients
+              broadcastToRoom(roomId, "room-state", {
+                participants: getParticipantsArray(loaded),
+                revealed: loaded.revealed,
+                autoReveal: loaded.autoReveal,
+                timer: loaded.timer,
+                story: loaded.story,
+                history: loaded.history,
+              });
+            }
+          })
+          .catch((err) => {
+            console.error(`Failed to reload room ${roomId}:`, err);
+          });
+      } else {
+        // Normal broadcast
+        broadcastToRoom(roomId, type, data, excludeId);
+      }
     } catch (err) {
       console.error("Redis message parse error:", err);
     }
@@ -179,6 +219,94 @@ async function publishToRedis(
   }
 }
 
+async function saveRoomState(roomId: string): Promise<void> {
+  if (!redisPub) return; // Skip if Redis not configured
+
+  const room = rooms.get(roomId);
+  if (!room) return;
+
+  try {
+    const roomState = {
+      id: room.id,
+      participants: Array.from(room.participants.entries()).map(([id, p]) => ({
+        id: p.id,
+        name: p.name,
+        vote: p.vote,
+        paused: p.paused,
+        participantId: p.participantId,
+        connected: p.connected,
+        lastSeen: p.lastSeen,
+        replicaId: p.replicaId,
+      })),
+      revealed: room.revealed,
+      autoReveal: room.autoReveal,
+      timer: room.timer,
+      story: room.story,
+      history: room.history,
+    };
+
+    const key = `room:${roomId}`;
+    const ttl = 24 * 60 * 60; // 24 hours
+
+    await redisPub.setex(key, ttl, JSON.stringify(roomState));
+    console.log(
+      `✓ Saved room ${roomId} to Redis (${roomState.participants.length} participants)`,
+    );
+
+    // Notify other replicas to reload from Redis
+    await publishToRedis(roomId, "room-updated", {}, "");
+  } catch (error) {
+    console.error(`✗ Failed to save room state for ${roomId}:`, error);
+  }
+}
+
+async function loadRoomState(roomId: string): Promise<RoomState | null> {
+  if (!redisPub) return null; // Skip if Redis not configured
+
+  try {
+    const key = `room:${roomId}`;
+    const data = await redisPub.get(key);
+
+    if (!data) return null;
+
+    const parsed = JSON.parse(data);
+
+    // Convert participants array back to Map
+    const participantsMap = new Map<string, Participant>();
+    if (parsed.participants && Array.isArray(parsed.participants)) {
+      for (const p of parsed.participants) {
+        participantsMap.set(p.id, {
+          id: p.id,
+          name: p.name,
+          vote: p.vote ?? null,
+          paused: p.paused ?? false,
+          participantId: p.participantId,
+          connected: p.connected ?? false,
+          lastSeen: p.lastSeen ?? Date.now(),
+          replicaId: p.replicaId ?? replicaId,
+        });
+      }
+    }
+
+    console.log(
+      `✓ Loaded room ${roomId} from Redis (${participantsMap.size} participants)`,
+    );
+
+    return {
+      id: parsed.id,
+      participants: participantsMap,
+      revealed: parsed.revealed ?? false,
+      autoReveal: parsed.autoReveal ?? false,
+      timer: parsed.timer ?? null,
+      story: parsed.story ?? null,
+      history: parsed.history ?? [],
+    };
+  } catch (error) {
+    console.error(`✗ Failed to load room state for ${roomId}:`, error);
+    return null;
+  }
+}
+
 function emitToRoom(
   roomId: string,
   type: string,
@@ -204,6 +332,13 @@ function deleteRoomIfEmpty(roomId: string) {
   if (!hasConnectedParticipants) {
     console.log(`🧹 Deleting empty room: ${roomId}`);
     rooms.delete(roomId);
+
+    // Also delete from Redis
+    if (redisPub) {
+      redisPub.del(`room:${roomId}`).catch((error) => {
+        console.error(`Failed to delete room ${roomId} from Redis:`, error);
+      });
+    }
   }
 }
 
@@ -218,8 +353,18 @@ export function initWebSocketServer(httpServer: HTTPServer) {
   });
 
   if (process.env.REDIS_URL) {
-    redisPub = new Redis(process.env.REDIS_URL);
-    redisSub = new Redis(process.env.REDIS_URL);
+    // Redis connection options with retry strategy
+    const redisOptions = {
+      retryStrategy(times: number) {
+        const delay = Math.min(times * 50, 2000);
+        console.log(`🔄 Redis reconnecting (attempt ${times}, delay: ${delay}ms)`);
+        return delay;
+      },
+      maxRetriesPerRequest: 3,
+    };
+
+    redisPub = new Redis(process.env.REDIS_URL, redisOptions);
+    redisSub = new Redis(process.env.REDIS_URL, redisOptions);
 
     redisPub.on("error", (err) => console.error("Redis pub error:", err));
     redisSub.on("error", (err) => console.error("Redis sub error:", err));
@@ -229,6 +374,17 @@ export function initWebSocketServer(httpServer: HTTPServer) {
       console.log("✓ Redis sub connected");
       setupRedisSubscription();
     });
+
+    // Re-subscribe on reconnect
+    redisSub.on("ready", () => {
+      console.log("✓ Redis sub ready, ensuring subscription...");
+      setupRedisSubscription();
+    });
+
+    console.log("✓ Distributed mode enabled (Redis)");
+  } else {
+    console.log("⚠️  Single instance mode (no Redis)");
+    console.log("   For distributed deployments, set REDIS_URL");
   }
 
   const interval = setInterval(() => {
@@ -245,7 +401,9 @@ export function initWebSocketServer(httpServer: HTTPServer) {
 
   // Cleanup stale participants every minute
   const cleanupInterval = setInterval(() => {
-    cleanupStaleParticipants();
+    cleanupStaleParticipants().catch((err) => {
+      console.error("Cleanup error:", err);
+    });
   }, 60000);
 
   wss.on("close", () => {
@@ -271,7 +429,9 @@ export function initWebSocketServer(httpServer: HTTPServer) {
       try {
         const message: WSMessage = JSON.parse(data.toString());
         console.log("📥 Message received from", extWs.id, ":", message.type);
-        handleMessage(extWs, message);
+        handleMessage(extWs, message).catch((err) => {
+          console.error("Message handling error:", err);
+        });
       } catch (err) {
         console.error("Message parse error:", err);
       }
@@ -286,7 +446,9 @@ export function initWebSocketServer(httpServer: HTTPServer) {
         "reason:",
         reason,
       );
-      handleDisconnect(extWs);
+      handleDisconnect(extWs).catch((err) => {
+        console.error("Disconnect handling error:", err);
+      });
     });
 
     ws.on("error", (err) => {
@@ -298,55 +460,55 @@ export function initWebSocketServer(httpServer: HTTPServer) {
   return wss;
 }
 
-function handleMessage(ws: ExtendedWebSocket, message: WSMessage) {
+async function handleMessage(ws: ExtendedWebSocket, message: WSMessage) {
   const { type, data } = message;
 
   switch (type) {
     case "join-room":
-      handleJoinRoom(ws, data as { roomId: string; name: string });
+      await handleJoinRoom(ws, data as { roomId: string; name: string });
       break;
     case "vote":
-      handleVote(ws, data as { roomId: string; vote: string });
+      await handleVote(ws, data as { roomId: string; vote: string });
       break;
     case "reveal":
-      handleReveal(ws, data as { roomId: string });
+      await handleReveal(ws, data as { roomId: string });
       break;
     case "reestimate":
-      handleReestimate(ws, data as { roomId: string });
+      await handleReestimate(ws, data as { roomId: string });
       break;
     case "reset":
-      handleReset(ws, data as { roomId: string });
+      await handleReset(ws, data as { roomId: string });
       break;
     case "update-story":
-      handleUpdateStory(ws, data as { roomId: string; story: unknown });
+      await handleUpdateStory(ws, data as { roomId: string; story: unknown });
       break;
     case "suspend-voting":
-      handleSuspendVoting(ws, data as { roomId: string });
+      await handleSuspendVoting(ws, data as { roomId: string });
       break;
     case "resume-voting":
-      handleResumeVoting(ws, data as { roomId: string });
+      await handleResumeVoting(ws, data as { roomId: string });
       break;
     case "update-name":
-      handleUpdateName(ws, data as { roomId: string; name: string });
+      await handleUpdateName(ws, data as { roomId: string; name: string });
       break;
     case "toggle-auto-reveal":
-      handleToggleAutoReveal(
+      await handleToggleAutoReveal(
         ws,
         data as { roomId: string; autoReveal: boolean },
       );
       break;
     case "start-timer":
-      handleStartTimer(ws, data as { roomId: string; duration: number });
+      await handleStartTimer(ws, data as { roomId: string; duration: number });
       break;
     case "stop-timer":
-      handleStopTimer(ws, data as { roomId: string });
+      await handleStopTimer(ws, data as { roomId: string });
       break;
     default:
       console.warn("Unknown message type:", type);
   }
 }
 
-function handleJoinRoom(
+async function handleJoinRoom(
   ws: ExtendedWebSocket,
   data: { roomId: string; name: string; participantId?: string },
 ) {
@@ -360,7 +522,7 @@ function handleJoinRoom(
   );
   ws.roomId = roomId;
 
-  const room = getOrCreateRoom(roomId);
+  const room = await getOrCreateRoom(roomId);
 
   // First, try to match by participantId if provided
   let existingParticipant: Participant | null = null;
@@ -505,9 +667,12 @@ function handleJoinRoom(
   console.log("📤 Broadcasting room-state to other clients in", roomId);
   emitToRoom(roomId, "room-state", roomState, ws.id);
   console.log("✅ join-room completed for", ws.id);
+
+  // Save room state to Redis
+  await saveRoomState(roomId);
 }
 
-function handleVote(
+async function handleVote(
   ws: ExtendedWebSocket,
   data: { roomId: string; vote: string },
 ) {
@@ -530,6 +695,9 @@ function handleVote(
     participant.vote = vote;
     emitToRoom(roomId, "participant-voted", { id: ws.id, hasVote: !!vote });
 
+    // Save state after vote
+    await saveRoomState(roomId);
+
     if (room.autoReveal && !room.revealed && vote) {
       const activeParticipants = Array.from(room.participants.values()).filter(
         (p) => !p.paused && p.connected,
@@ -537,13 +705,13 @@ function handleVote(
       const allVoted = activeParticipants.every((p) => p.vote);
       if (allVoted && activeParticipants.length > 0) {
         console.log("🚀 Auto-revealing room:", roomId);
-        handleReveal(ws, { roomId });
+        await handleReveal(ws, { roomId });
       }
     }
   }
 }
 
-function handleReveal(_ws: ExtendedWebSocket, data: { roomId: string }) {
+async function handleReveal(_ws: ExtendedWebSocket, data: { roomId: string }) {
   const { roomId } = data;
   const room = rooms.get(roomId);
   if (!room) return;
@@ -564,9 +732,12 @@ function handleReveal(_ws: ExtendedWebSocket, data: { roomId: string }) {
     participants: getParticipantsArray(room),
     history: room.history,
   });
+
+  // Save state after reveal
+  await saveRoomState(roomId);
 }
 
-function handleReestimate(_ws: ExtendedWebSocket, data: { roomId: string }) {
+async function handleReestimate(_ws: ExtendedWebSocket, data: { roomId: string }) {
   const { roomId } = data;
   const room = rooms.get(roomId);
   if (!room) return;
@@ -597,9 +768,12 @@ function handleReestimate(_ws: ExtendedWebSocket, data: { roomId: string }) {
     story: room.story ?? null,
     history: room.history,
   });
+
+  // Save state after reestimate
+  await saveRoomState(roomId);
 }
 
-function handleReset(_ws: ExtendedWebSocket, data: { roomId: string }) {
+async function handleReset(_ws: ExtendedWebSocket, data: { roomId: string }) {
   const { roomId } = data;
   const room = rooms.get(roomId);
   if (!room) return;
@@ -628,9 +802,12 @@ function handleReset(_ws: ExtendedWebSocket, data: { roomId: string }) {
     story: room.story ?? null,
     history: room.history,
   });
+
+  // Save state after reset
+  await saveRoomState(roomId);
 }
 
-function handleUpdateStory(
+async function handleUpdateStory(
   _ws: ExtendedWebSocket,
   data: { roomId: string; story: unknown },
 ) {
@@ -641,9 +818,12 @@ function handleUpdateStory(
   room.story = (story as { title: string; link: string } | null) ?? null;
   console.log("📥 update-story received:", { roomId, story });
   emitToRoom(roomId, "story-updated", { story: room.story });
+
+  // Save state after story update
+  await saveRoomState(roomId);
 }
 
-function handleSuspendVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
+async function handleSuspendVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
   const { roomId } = data;
   const room = rooms.get(roomId);
   if (room) {
@@ -658,11 +838,14 @@ function handleSuspendVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
         story: room.story ?? null,
         history: room.history,
       });
+
+      // Save state after suspending voting
+      await saveRoomState(roomId);
     }
   }
 }
 
-function handleResumeVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
+async function handleResumeVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
   const { roomId } = data;
   const room = rooms.get(roomId);
   if (room) {
@@ -677,11 +860,14 @@ function handleResumeVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
         story: room.story ?? null,
         history: room.history,
       });
+
+      // Save state after resuming voting
+      await saveRoomState(roomId);
     }
   }
 }
 
-function handleDisconnect(ws: ExtendedWebSocket) {
+async function handleDisconnect(ws: ExtendedWebSocket) {
   console.log("❌ Client disconnected:", ws.id);
   clients.delete(ws.id);
 
@@ -717,16 +903,19 @@ function handleDisconnect(ws: ExtendedWebSocket) {
           history: room.history,
         };
         emitToRoom(ws.roomId, "room-state", roomState);
+
+        // Save state after disconnect
+        await saveRoomState(ws.roomId);
       }
     }
   }
 }
 
-function cleanupStaleParticipants() {
+async function cleanupStaleParticipants() {
   const now = Date.now();
   const staleTimeout = 5 * 60 * 1000; // 5 minutes
 
-  rooms.forEach((room, roomId) => {
+  for (const [roomId, room] of rooms.entries()) {
     let removed = false;
 
     for (const [id, participant] of room.participants.entries()) {
@@ -777,8 +966,11 @@ function cleanupStaleParticipants() {
         history: room.history,
       };
       emitToRoom(roomId, "room-state", roomState);
+
+      // Save state after cleanup
+      await saveRoomState(roomId);
     }
-  });
+  }
 }
 
 function getParticipantsArray(room: RoomState): Participant[] {
@@ -801,7 +993,7 @@ function getParticipantsArray(room: RoomState): Participant[] {
   return participants;
 }
 
-function handleUpdateName(
+async function handleUpdateName(
   ws: ExtendedWebSocket,
   data: { roomId: string; name: string },
 ) {
@@ -867,9 +1059,12 @@ function handleUpdateName(
 
   console.log("📤 Broadcasting updated room-state to room %s", roomId);
   emitToRoom(roomId, "room-state", roomState);
+
+  // Save state after name update
+  await saveRoomState(roomId);
 }
 
-function handleToggleAutoReveal(
+async function handleToggleAutoReveal(
   _ws: ExtendedWebSocket,
   data: { roomId: string; autoReveal: boolean },
 ) {
@@ -880,9 +1075,12 @@ function handleToggleAutoReveal(
   room.autoReveal = autoReveal;
   console.log("📥 toggle-auto-reveal received:", { roomId, autoReveal });
   emitToRoom(roomId, "auto-reveal-updated", { autoReveal });
+
+  // Save state after auto-reveal toggle
+  await saveRoomState(roomId);
 }
 
-function handleStartTimer(
+async function handleStartTimer(
   _ws: ExtendedWebSocket,
   data: { roomId: string; duration: number },
 ) {
@@ -894,9 +1092,12 @@ function handleStartTimer(
   room.timer = { endTime, duration };
   console.log("📥 start-timer received:", { roomId, duration, endTime });
   emitToRoom(roomId, "timer-updated", { timer: room.timer });
+
+  // Save state after timer start
+  await saveRoomState(roomId);
 }
 
-function handleStopTimer(_ws: ExtendedWebSocket, data: { roomId: string }) {
+async function handleStopTimer(_ws: ExtendedWebSocket, data: { roomId: string }) {
   const { roomId } = data;
   const room = rooms.get(roomId);
   if (!room) return;
@@ -904,10 +1105,25 @@ function handleStopTimer(_ws: ExtendedWebSocket, data: { roomId: string }) {
   room.timer = null;
   console.log("📥 stop-timer received:", { roomId });
   emitToRoom(roomId, "timer-updated", { timer: null });
+
+  // Save state after timer stop
+  await saveRoomState(roomId);
 }
 
 export async function shutdown(): Promise<void> {
   try {
+    // Save all rooms to Redis before shutdown
+    if (redisPub && rooms.size > 0) {
+      console.log(`💾 Saving ${rooms.size} rooms to Redis before shutdown...`);
+      const savePromises = Array.from(rooms.keys()).map((roomId) =>
+        saveRoomState(roomId).catch((err) => {
+          console.error(`Failed to save room ${roomId}:`, err);
+        }),
+      );
+      await Promise.all(savePromises);
+      console.log("✓ All rooms saved to Redis");
+    }
+
     if (wss) {
       console.log("Closing WebSocket connections...");
       for (const client of wss.clients) {
