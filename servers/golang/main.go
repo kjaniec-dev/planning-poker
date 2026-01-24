@@ -1338,8 +1338,13 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func getAllowedOrigins() []string {
 	originsEnv := os.Getenv("ALLOWED_ORIGINS")
 	if originsEnv == "" {
-		// Default to localhost for development
-		return []string{"http://localhost:3000", "https://localhost:3000"}
+		// Default to localhost and 0.0.0.0 for development
+		return []string{
+			"http://localhost:3000",
+			"https://localhost:3000",
+			"http://0.0.0.0:3000",
+			"https://0.0.0.0:3000",
+		}
 	}
 
 	var origins []string

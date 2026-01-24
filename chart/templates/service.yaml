@@ -6,6 +6,14 @@ metadata:
     {{- include "chart.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
+  {{- if .Values.service.sessionAffinity.enabled }}
+  # Client IP-based session affinity for WebSocket connections
+  # Ensures clients from the same IP connect to the same pod
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: {{ .Values.service.sessionAffinity.timeoutSeconds }}
+  {{- end }}
   ports:
     - port: {{ .Values.service.port }}
       targetPort: http

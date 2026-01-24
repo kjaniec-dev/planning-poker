@@ -17,6 +17,7 @@ type Props = {
   revealed: boolean;
   onReveal: () => void;
   canReveal: boolean;
+  isPaused?: boolean;
   onReestimate?: () => void;
   previousRound?: {
     id: string;
@@ -30,6 +31,7 @@ export function Results({
   revealed,
   onReveal,
   canReveal,
+  isPaused = false,
   onReestimate,
   previousRound,
 }: Props) {
@@ -83,7 +85,7 @@ export function Results({
         <div className="flex items-center gap-2">
           <ConfirmDialog
             trigger={
-              <Button size="sm" disabled={!canReveal || revealed}>
+              <Button size="sm" disabled={!canReveal || revealed || isPaused}>
                 Reveal
               </Button>
             }
@@ -95,7 +97,7 @@ export function Results({
           {revealed && onReestimate && (
             <ConfirmDialog
               trigger={
-                <Button size="sm" variant="outline">
+                <Button size="sm" variant="outline" disabled={isPaused}>
                   Re-estimate
                 </Button>
               }
