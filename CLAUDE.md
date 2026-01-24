@@ -752,6 +752,128 @@ const value = process.env.NEW_VAR
 const publicValue = process.env.NEXT_PUBLIC_NEW_VAR
 ```
 
+### Migrating from Ingress to Gateway API
+
+**Why Migrate:**
+Kubernetes Ingress will be frozen and unmaintained from March 2026. The Gateway API is the successor and provides more features, better extensibility, and is the recommended approach for Kubernetes networking.
+
+**Prerequisites:**
+
+1. **Install Gateway API CRDs** in your cluster:
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
+```
+
+2. **Deploy a Gateway** (or use an existing one):
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gateway
+  namespace: default
+spec:
+  gatewayClassName: istio  # Or nginx, contour, etc.
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 80
+  - name: https
+    protocol: HTTPS
+    port: 443
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: planning-poker-tls
+```
+
+**Migration Steps:**
+
+**1. Update `chart/values.yaml`:**
+```yaml
+# Disable Ingress (deprecated)
+ingress:
+  enabled: false
+
+# Enable Gateway API HTTPRoute
+httpRoute:
+  enabled: true
+  parentRefs:
+  - name: gateway              # Name of your Gateway
+    namespace: default         # Gateway namespace
+    sectionName: http          # Or 'https' for TLS
+  hostnames:
+  - planning-poker.example.com
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+```
+
+**2. WebSocket Considerations:**
+
+Gateway API handles WebSocket connections natively via HTTP/1.1 upgrade protocol. Ensure your Gateway implementation supports WebSocket:
+
+- **Istio**: Supports WebSocket out of the box
+- **NGINX Gateway Fabric**: Supports WebSocket natively
+- **Contour**: Supports WebSocket via HTTP upgrade
+
+For sticky sessions (recommended for WebSocket), configure session affinity on the Service:
+```yaml
+# Already configured in chart/templates/service.yaml
+service:
+  sessionAffinity:
+    enabled: true
+    timeoutSeconds: 10800  # 3 hours
+```
+
+**3. TLS/HTTPS Configuration:**
+
+For HTTPS with cert-manager:
+
+```yaml
+httpRoute:
+  enabled: true
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  parentRefs:
+  - name: gateway
+    sectionName: https  # Use HTTPS listener
+  hostnames:
+  - planning-poker.example.com
+```
+
+Ensure your Gateway has a TLS listener configured with a certificate.
+
+**4. Deploy and Test:**
+
+```bash
+# Install/upgrade with Gateway API
+helm upgrade --install planning-poker ./chart \
+  --set httpRoute.enabled=true \
+  --set ingress.enabled=false \
+  --set httpRoute.parentRefs[0].name=gateway \
+  --set httpRoute.hostnames[0]=planning-poker.example.com
+
+# Verify HTTPRoute is created
+kubectl get httproute
+
+# Check Gateway status
+kubectl get gateway
+
+# Test connectivity
+curl -H "Host: planning-poker.example.com" http://<gateway-ip>
+```
+
+**5. Verify WebSocket Connection:**
+
+Open browser DevTools → Network tab → WS filter, then join a room. You should see a successful WebSocket connection with status "101 Switching Protocols".
+
+**Migration Resources:**
+- [Gateway API Official Docs](https://gateway-api.sigs.k8s.io/)
+- [Migrating from Ingress Guide](https://gateway-api.sigs.k8s.io/guides/migrating-from-ingress/)
+- [Gateway API Implementations](https://gateway-api.sigs.k8s.io/implementations/)
+
 ---
 
 ## Deployment Modes

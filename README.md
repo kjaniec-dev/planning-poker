@@ -281,7 +281,38 @@ helm install planning-poker ./chart \
   --set planningPoker.language=node
 ```
 
-See [chart/README.md](./chart/README.md) for Kubernetes deployment details.
+#### Networking: Gateway API (Recommended)
+
+**Note:** Kubernetes Ingress will be frozen from March 2026. The chart supports **Gateway API** as the recommended networking approach.
+
+**Prerequisites:**
+```bash
+# Install Gateway API CRDs
+kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
+```
+
+**Enable Gateway API:**
+```bash
+helm install planning-poker ./chart \
+  --set httpRoute.enabled=true \
+  --set httpRoute.parentRefs[0].name=gateway \
+  --set httpRoute.hostnames[0]=planning-poker.example.com
+```
+
+Or configure in `values.yaml`:
+```yaml
+httpRoute:
+  enabled: true
+  parentRefs:
+  - name: gateway
+    sectionName: http
+  hostnames:
+  - planning-poker.example.com
+```
+
+The Gateway API provides better WebSocket support and is the future of Kubernetes networking. See [CLAUDE.md](./CLAUDE.md) for detailed migration guide.
+
+See [chart/README.md](./chart/README.md) for complete Kubernetes deployment details.
 
 ## Architecture
 

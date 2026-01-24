@@ -106,6 +106,9 @@ service:
     timeoutSeconds: 10800
 
 # Ingress configuration
+# DEPRECATED: Kubernetes Ingress will be frozen and unmaintained from March 2026
+# Please migrate to Gateway API (httpRoute configuration below) instead
+# See: https://gateway-api.sigs.k8s.io/guides/migrating-from-ingress/
 ingress:
   enabled: false
   className: ""
@@ -126,21 +129,64 @@ ingress:
     #   hosts:
     #     - planning-poker.example.com
 
-# Gateway API HTTPRoute configuration
-# Requires Gateway API CRDs installed
+# Gateway API HTTPRoute configuration (RECOMMENDED)
+# Gateway API is the successor to Ingress and is the recommended approach
+# Requires Gateway API CRDs installed in your cluster
+# See: https://gateway-api.sigs.k8s.io/
+#
+# Installation:
+#   kubectl apply -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.2.1/standard-install.yaml
+#
+# For WebSocket support and sticky sessions, configure your Gateway with:
+#   - Session affinity/persistence (implementation-specific)
+#   - HTTP/1.1 upgrade protocol support for WebSocket connections
 httpRoute:
   enabled: false
   annotations: {}
+    # Example annotations for cert-manager
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+
+  # Reference to the parent Gateway resource
+  # The Gateway must exist in your cluster and be properly configured
   parentRefs:
-  - name: gateway
-    sectionName: http
+  - name: gateway              # Name of your Gateway resource
+    namespace: default         # Namespace where Gateway is deployed (optional, defaults to same namespace)
+    sectionName: http          # Listener name on the Gateway (e.g., http, https)
+    # For HTTPS/TLS:
+    # - name: gateway
+    #   sectionName: https
+
+  # Hostnames that this HTTPRoute should match
+  # Must be configured on the parent Gateway's listeners
   hostnames:
   - planning-poker.example.com
+
+  # Routing rules for matching requests and forwarding to backends
+  # The service backend is automatically configured to point to this chart's service
   rules:
   - matches:
     - path:
-        type: PathPrefix
+        type: PathPrefix       # PathPrefix, Exact, or RegularExpression
         value: /
+    # Optional: Add filters for request/response manipulation
+    # filters:
+    # - type: RequestHeaderModifier
+    #   requestHeaderModifier:
+    #     add:
+    #     - name: X-Custom-Header
+    #       value: "planning-poker"
+
+  # Example: Multiple rules for different paths
+  # - matches:
+  #   - path:
+  #       type: PathPrefix
+  #       value: /api
+  #   filters:
+  #   - type: URLRewrite
+  #     urlRewrite:
+  #       path:
+  #         type: ReplacePrefixMatch
+  #         replacePrefixMatch: /v1
 
 # Resource limits and requests
 resources:

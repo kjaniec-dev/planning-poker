@@ -1,4 +1,13 @@
 {{- if .Values.ingress.enabled -}}
+{{/*
+DEPRECATION NOTICE: Kubernetes Ingress will be frozen and unmaintained from March 2026.
+Please migrate to Gateway API (httpRoute) instead.
+To enable Gateway API:
+  1. Set httpRoute.enabled=true in values.yaml
+  2. Configure httpRoute.parentRefs to reference your Gateway
+  3. Set ingress.enabled=false
+See: https://gateway-api.sigs.k8s.io/guides/migrating-from-ingress/
+*/}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
