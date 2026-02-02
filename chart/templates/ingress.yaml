@@ -44,9 +44,15 @@ spec:
             {{- end }}
             backend:
               service:
+                {{- if eq .path "/api/realtime" }}
+                name: {{ include "chart.fullname" $ }}-websocket
+                port:
+                  number: {{ $.Values.planningPoker.websocket.service.port }}
+                {{- else }}
                 name: {{ .serviceName | default (include "chart.fullname" $) }}
                 port:
                   number: {{ .servicePort | default $.Values.service.port }}
+                {{- end }}
           {{- end }}
     {{- end }}
 {{- end }}

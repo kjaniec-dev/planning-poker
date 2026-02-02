@@ -37,6 +37,16 @@ planningPoker:
   # Options: node or golang
   language: node
 
+  # External WebSocket server configuration (for external mode)
+  websocket:
+    enabled: true
+    replicaCount: 1
+    image:
+      repository: kjaniec/planning-poker-websocket-node
+      tag: "latest"
+    service:
+      port: 3001
+
   # Environment variables for the application
   env:
     # REALTIME_MODE: Set based on mode above

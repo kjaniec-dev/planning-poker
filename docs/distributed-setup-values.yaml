@@ -39,12 +39,13 @@ redis:
     persistence:
       enabled: false
 
-# Ingress configuration
+# Ingress configuration (Old way)
 ingress:
-  enabled: true
+  enabled: false
   className: "nginx"
   annotations:
     nginx.ingress.kubernetes.io/websocket-services: "planning-poker-websocket"
+    nginx.ingress.kubernetes.io/affinity: "cookie"
   hosts:
     - host: planning-poker.local
       paths:
@@ -52,3 +53,12 @@ ingress:
           pathType: Prefix
         - path: /api/realtime
           pathType: Prefix
+
+# Gateway API configuration (Recommended)
+httpRoute:
+  enabled: true
+  gatewayClassName: "nginx"
+  parentRefs:
+    - name: planning-poker-gateway
+  hostnames:
+    - planning-poker.local

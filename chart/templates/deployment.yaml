@@ -111,3 +111,43 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+---
+{{- if and (eq .Values.planningPoker.mode "external") .Values.planningPoker.websocket.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chart.fullname" . }}-websocket
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+    app.kubernetes.io/component: websocket
+spec:
+  replicas: {{ .Values.planningPoker.websocket.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "chart.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: websocket
+  template:
+    metadata:
+      labels:
+        {{- include "chart.labels" . | nindent 8 }}
+        app.kubernetes.io/component: websocket
+    spec:
+      containers:
+        - name: websocket
+          image: "{{ .Values.planningPoker.websocket.image.repository }}:{{ .Values.planningPoker.websocket.image.tag | default "latest" }}"
+          ports:
+            - name: ws
+              containerPort: {{ .Values.planningPoker.websocket.service.port }}
+              protocol: TCP
+          env:
+            - name: PORT
+              value: "{{ .Values.planningPoker.websocket.service.port }}"
+            {{- if .Values.planningPoker.env.redisUrl }}
+            - name: REDIS_URL
+              value: "{{ .Values.planningPoker.env.redisUrl }}"
+            {{- end }}
+            {{- if .Values.planningPoker.env.allowedOrigins }}
+            - name: ALLOWED_ORIGINS
+              value: "{{ .Values.planningPoker.env.allowedOrigins }}"
+            {{- end }}
+{{- end }}

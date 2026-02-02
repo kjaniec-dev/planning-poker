@@ -1,0 +1,17 @@
+{{- if .Values.httpRoute.enabled -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ include "chart.fullname" . }}-gateway
+  labels:
+    {{- include "chart.labels" . | nindent 4 }}
+spec:
+  gatewayClassName: {{ .Values.httpRoute.gatewayClassName | default "nginx" }}
+  listeners:
+    - name: http
+      port: 80
+      protocol: HTTP
+      allowedRoutes:
+        namespaces:
+          from: Same
+{{- end }}
