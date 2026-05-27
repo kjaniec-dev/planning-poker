@@ -77,10 +77,10 @@ export function Timer({ timer, onStart, onStop }: TimerProps) {
       {timer && timeLeft !== null ? (
         <div className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-md border">
           <TimerIcon
-            className={`h-4 w-4 ${timeLeft < 10 ? "text-destructive animate-pulse" : ""}`}
+            className={`h-4 w-4 ${timeLeft < 10 ? "text-danger animate-pulse" : ""}`}
           />
           <span
-            className={`font-mono font-medium min-w-[3ch] text-center ${timeLeft < 10 ? "text-destructive" : ""}`}
+            className={`font-mono font-medium min-w-[3ch] text-center ${timeLeft < 10 ? "text-danger" : ""}`}
           >
             {formatTime(timeLeft)}
           </span>
@@ -89,7 +89,7 @@ export function Timer({ timer, onStart, onStop }: TimerProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 ml-1 hover:bg-destructive/10 hover:text-destructive"
+                className="h-6 w-6 ml-1 hover:bg-danger/10 hover:text-danger"
                 onClick={onStop}
               >
                 <Square className="h-3 w-3 fill-current" />

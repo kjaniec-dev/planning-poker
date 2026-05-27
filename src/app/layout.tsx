@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import Image from "next/image";
 import Link from "next/link";
 import { ThemeProvider } from "@/app/components/theme-provider";
 import { ThemeToggle } from "@/app/components/theme-toggle";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--kj-font-sans",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--kj-font-mono",
   subsets: ["latin"],
 });
 
@@ -28,34 +29,55 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
       >
         <ThemeProvider
           attribute="class"
-          defaultTheme="system"
-          enableSystem
+          defaultTheme="dark"
+          enableSystem={false}
           disableTransitionOnChange
         >
           <div className="min-h-screen bg-background flex flex-col">
-            <nav className="border-b">
+            <nav className="border-b border-border/60">
               <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-                <Link href="/" className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center font-bold text-white text-sm">
-                    PP
-                  </div>
-                  <span className="text-xl font-semibold tracking-tight">
+                <Link href="/" className="flex items-center gap-3 group">
+                  <Image
+                    src="/logo-light.png"
+                    alt="Planning Poker"
+                    width={160}
+                    height={40}
+                    className="h-10 w-auto dark:hidden"
+                    priority
+                  />
+                  <Image
+                    src="/logo-dark.png"
+                    alt="Planning Poker"
+                    width={160}
+                    height={40}
+                    className="h-10 w-auto hidden dark:block"
+                    priority
+                  />
+                  <span className="text-base font-semibold tracking-tight">
                     Planning Poker
                   </span>
                 </Link>
-                <ThemeToggle />
+                <div className="flex items-center gap-2">
+                  <ThemeToggle />
+                </div>
               </div>
             </nav>
 
             <main className="flex-1">{children}</main>
 
-            <footer className="border-t px-6 py-6">
-              <div className="max-w-7xl mx-auto text-center text-sm text-muted-foreground">
-                Built for agile teams • Dark & Light modes included
+            <footer className="border-t border-border/60 px-6 py-6">
+              <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-muted-foreground">
+                <span className="flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-secondary shadow-[0_0_8px_var(--kj-secondary)]" />
+                  Real-time · open source
+                </span>
+                <span className="text-xs uppercase tracking-[0.18em]">
+                  Built for agile teams
+                </span>
               </div>
             </footer>
           </div>

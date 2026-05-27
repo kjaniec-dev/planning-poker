@@ -50,40 +50,88 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <div className="flex-1 flex items-center justify-center px-6 py-12">
-        <div className="w-full max-w-md space-y-8">
-          <div className="space-y-3 text-center">
-            <h2 className="text-4xl font-bold tracking-tight">
-              Estimate Together
-            </h2>
-            <p className="text-lg text-muted-foreground">
-              Real-time planning poker for agile teams
-            </p>
+    <div className="relative min-h-[calc(100vh-8rem)] bg-background overflow-hidden">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-32 -left-32 h-[420px] w-[420px] rounded-full bg-primary/20 blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-32 -right-32 h-[420px] w-[420px] rounded-full bg-secondary/20 blur-3xl"
+      />
+      <div className="relative max-w-7xl mx-auto px-6 py-16 lg:py-24 grid lg:grid-cols-[1.1fr_1fr] gap-12 items-center">
+        <div className="space-y-8">
+          <div className="inline-flex items-center gap-2 rounded-kj-2xl border border-border/80 bg-card/60 backdrop-blur px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            <span className="inline-block h-2 w-2 rounded-full bg-primary shadow-[0_0_10px_var(--kj-primary)]" />
+            Real-time planning poker
           </div>
+          <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.05]">
+            Estimate{" "}
+            <span className="text-primary">together,</span>
+            <br />
+            ship with{" "}
+            <span className="text-secondary">confidence.</span>
+          </h1>
+          <p className="text-lg text-muted-foreground max-w-xl">
+            A premium estimation room for agile teams. Live voting, instant
+            reveal, story-by-story flow — no signup, no friction.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {[
+              { label: "Fibonacci 0 – 40", tone: "secondary" as const },
+              { label: "Sub-second sync", tone: "primary" as const },
+              { label: "No account", tone: "muted" as const },
+            ].map((chip) => (
+              <span
+                key={chip.label}
+                className={`inline-flex items-center gap-1.5 rounded-kj-2xl border border-border/70 bg-card/60 px-3 py-1.5 text-xs font-medium ${
+                  chip.tone === "secondary"
+                    ? "text-secondary"
+                    : chip.tone === "primary"
+                      ? "text-primary"
+                      : "text-muted-foreground"
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    chip.tone === "secondary"
+                      ? "bg-secondary"
+                      : chip.tone === "primary"
+                        ? "bg-primary"
+                        : "bg-muted-foreground"
+                  }`}
+                />
+                {chip.label}
+              </span>
+            ))}
+          </div>
+        </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Get Started</CardTitle>
+        <div className="relative">
+          <div
+            aria-hidden
+            className="absolute -inset-px rounded-kj-2xl bg-gradient-to-br from-primary/40 via-transparent to-secondary/30 opacity-50 blur-md"
+          />
+          <Card className="relative shadow-kj-lg">
+            <CardHeader className="border-b border-border/60 pb-5">
+              <div className="flex items-center gap-1.5 mb-3">
+                <span className="h-2.5 w-2.5 rounded-full bg-danger/70" />
+                <span className="h-2.5 w-2.5 rounded-full bg-primary/70" />
+                <span className="h-2.5 w-2.5 rounded-full bg-secondary/70" />
+                <span className="ml-auto text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  planning-poker · room
+                </span>
+              </div>
+              <CardTitle className="text-2xl">Get started</CardTitle>
               <CardDescription>
                 Create a new room or join an existing one
               </CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="pt-6">
               <Tabs defaultValue="create" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 bg-muted rounded-md">
-                  <TabsTrigger
-                    value="create"
-                    className="data-[state=active]:bg-background data-[state=active]:text-foreground"
-                  >
-                    Create
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="join"
-                    className="data-[state=active]:bg-background data-[state=active]:text-foreground"
-                  >
-                    Join
-                  </TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="create">Create</TabsTrigger>
+                  <TabsTrigger value="join">Join</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="create" className="space-y-4 mt-4">
@@ -103,11 +151,12 @@ export default function LandingPage() {
                       />
                     </div>
                     <Button
-                      className="w-full mt-2"
+                      className="w-full mt-4 hover:shadow-kj-glow"
                       type="submit"
+                      size="lg"
                       disabled={!name}
                     >
-                      Create Room
+                      Create Room →
                     </Button>
                   </form>
                   <p className="text-sm text-muted-foreground text-center">
@@ -149,11 +198,12 @@ export default function LandingPage() {
                       </p>
                     </div>
                     <Button
-                      className="w-full mt-2"
+                      className="w-full mt-4 hover:shadow-kj-glow"
                       type="submit"
+                      size="lg"
                       disabled={!name || !roomCode}
                     >
-                      Join Room
+                      Join Room →
                     </Button>
                   </form>
                   <p className="text-sm text-muted-foreground text-center">

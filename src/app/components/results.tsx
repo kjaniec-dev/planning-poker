@@ -71,7 +71,10 @@ export function Results({
     <div className="space-y-6 py-4">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <h3 className="text-lg font-semibold leading-none tracking-tight">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-secondary">
+            Round summary
+          </span>
+          <h3 className="text-2xl font-bold leading-tight tracking-tight mt-1">
             Results
           </h3>
           <p className="text-sm text-muted-foreground mt-1">
@@ -175,16 +178,28 @@ export function Results({
                 </li>
               ))}
             </ul>
-            {results?.avg && (
-              <div className="text-sm border-t pt-2">
-                Average (numbers only):{" "}
-                <span className="font-semibold">{results.avg}</span>
-              </div>
-            )}
-            {results?.median && (
-              <div className="text-sm">
-                Median (numbers only):{" "}
-                <span className="font-semibold">{results.median}</span>
+            {(results?.avg || results?.median) && (
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                {results?.avg && (
+                  <div className="rounded-kj-xl border border-border/70 bg-surface px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Average
+                    </div>
+                    <div className="mt-1 font-mono text-2xl font-bold text-secondary">
+                      {results.avg}
+                    </div>
+                  </div>
+                )}
+                {results?.median && (
+                  <div className="rounded-kj-xl border border-border/70 bg-surface px-4 py-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                      Median
+                    </div>
+                    <div className="mt-1 font-mono text-2xl font-bold text-secondary">
+                      {results.median}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             <div className="pt-2 border-t">

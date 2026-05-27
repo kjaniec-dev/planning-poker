@@ -46,7 +46,7 @@ export function Participants({ participants }: Props) {
         </div>
         <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
           <motion.div
-            className="h-full bg-primary"
+            className="h-full bg-secondary shadow-[0_0_12px_var(--kj-secondary)]"
             initial={{ width: 0 }}
             animate={{ width: `${progress}%` }}
             transition={{ duration: 0.5, ease: "easeOut" }}
@@ -63,7 +63,7 @@ export function Participants({ participants }: Props) {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className={`flex items-center justify-between rounded-md border px-3 py-2 bg-card/50 ${
+                className={`flex items-center justify-between rounded-kj-lg border border-border/70 px-3 py-2 bg-surface ${
                   p.connected === false ? "opacity-50 grayscale-[0.5]" : ""
                 }`}
               >
@@ -104,7 +104,7 @@ export function Participants({ participants }: Props) {
                       initial={{ scale: 0.5, opacity: 0 }}
                       animate={{ scale: 1, opacity: 1 }}
                     >
-                      <Check className="h-4 w-4 text-primary" />
+                      <Check className="h-4 w-4 text-secondary" />
                     </motion.div>
                   ) : (
                     <Loader className="h-4 w-4 animate-spin text-muted-foreground/50" />

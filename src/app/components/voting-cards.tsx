@@ -112,18 +112,18 @@ export function VotingCards({
                 variant={isSelected ? "default" : "outline"}
                 onClick={() => handleVote(c)}
                 disabled={revealed}
-                className={`w-full h-24 text-xl relative preserve-3d transition-all duration-300 shadow-sm hover:shadow-md ${
+                className={`w-full h-24 text-2xl font-bold relative preserve-3d transition-all duration-300 ${
                   isPaused ? "cursor-not-allowed opacity-60" : ""
                 } ${
                   revealed && isSelected
-                    ? "ring-2 ring-primary ring-offset-2"
+                    ? "ring-2 ring-secondary ring-offset-2 ring-offset-background"
                     : ""
-                } ${revealed && !isSelected ? "opacity-40" : ""}
-                rounded-xl border-2
+                } ${revealed && !isSelected ? "opacity-30" : ""}
+                rounded-kj-xl border
                 ${
                   isSelected
-                    ? "bg-primary text-primary-foreground border-primary shadow-lg scale-105 z-10"
-                    : "bg-gradient-to-br from-card to-muted/50 border-border hover:border-primary/50"
+                    ? "bg-primary text-primary-foreground border-primary shadow-kj-glow scale-105 z-10"
+                    : "bg-card text-foreground border-border hover:border-primary/60 hover:bg-surface hover:-translate-y-0.5"
                 }
                 `}
               >

@@ -422,7 +422,7 @@ export default function GameRoomPage() {
 
                         <div className="flex flex-col gap-4 p-4 rounded-lg border bg-muted/30">
                           <div className="space-y-0.5">
-                            <h4 className="text-sm font-medium text-destructive">
+                            <h4 className="text-sm font-medium text-danger">
                               Danger Zone
                             </h4>
                             <p className="text-sm text-muted-foreground">
@@ -435,7 +435,7 @@ export default function GameRoomPage() {
                                 size="sm"
                                 variant="outline"
                                 disabled={isPaused}
-                                className="flex items-center gap-2 border-destructive text-destructive hover:bg-destructive hover:text-white w-full sm:w-auto sm:self-start"
+                                className="flex items-center gap-2 border-danger text-danger hover:bg-danger hover:text-white w-full sm:w-auto sm:self-start"
                               >
                                 <RotateCcw className="h-4 w-4" />
                                 <span>Reset Game</span>
