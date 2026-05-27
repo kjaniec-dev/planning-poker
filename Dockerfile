@@ -46,7 +46,7 @@ RUN npm run build
 
 
 # Stage 4: Production (Standalone mode - for external)
-FROM gcr.io/distroless/nodejs24-debian12:nonroot AS production-standalone
+FROM gcr.io/distroless/nodejs24-debian13:nonroot AS production-standalone
 
 WORKDIR /app
 
@@ -71,7 +71,7 @@ CMD ["server.js"]
 
 
 # Stage 5: Production (Non-standalone - for embedded mode with custom server)
-FROM gcr.io/distroless/nodejs24-debian12:nonroot AS production-embedded
+FROM gcr.io/distroless/nodejs24-debian13:nonroot AS production-embedded
 
 WORKDIR /app
 

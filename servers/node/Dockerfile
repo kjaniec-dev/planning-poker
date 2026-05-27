@@ -22,7 +22,7 @@ RUN npm run build
 
 # Stage 3: Production runner using Google Distroless
 # Distroless images provide minimal attack surface with no shell or package manager
-FROM gcr.io/distroless/nodejs24-debian12:nonroot
+FROM gcr.io/distroless/nodejs24-debian13:nonroot
 
 WORKDIR /app
 
