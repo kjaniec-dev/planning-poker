@@ -903,7 +903,7 @@ func TestBroadcastToRoomWithExclude(t *testing.T) {
 		"roomId": roomID,
 		"name":   "Alice",
 	})
-	readMessage(t, ws1, 2*time.Second) // room-state for ws1
+	ws1RoomState := readMessage(t, ws1, 2*time.Second) // room-state for ws1
 
 	sendMessage(t, ws2, "join-room", map[string]interface{}{
 		"roomId": roomID,
@@ -912,21 +912,27 @@ func TestBroadcastToRoomWithExclude(t *testing.T) {
 	readMessage(t, ws1, 2*time.Second) // room-state for ws1 (Bob joined)
 	readMessage(t, ws2, 2*time.Second) // room-state for ws2
 
-	// Get client IDs
-	server.clientsMu.RLock()
-	var client1ID string
-	for id := range server.clients {
-		if client1ID == "" {
-			client1ID = id
-		} else {
-			break
+	// Extract ws1's client ID from the room-state response (map iteration is non-deterministic)
+	var ws1ClientID string
+	if data, ok := ws1RoomState.Data.(map[string]interface{}); ok {
+		if ps, ok := data["participants"].([]interface{}); ok {
+			for _, p := range ps {
+				if pm, ok := p.(map[string]interface{}); ok {
+					if pm["name"] == "Alice" {
+						ws1ClientID, _ = pm["id"].(string)
+						break
+					}
+				}
+			}
 		}
 	}
-	server.clientsMu.RUnlock()
+	if ws1ClientID == "" {
+		t.Fatal("Could not find ws1 client ID from room-state")
+	}
 
-	// Broadcast a message excluding client 1
+	// Broadcast a message excluding ws1 (Alice)
 	testData := map[string]interface{}{"test": "data"}
-	server.broadcastToRoom(roomID, "test-message", testData, client1ID)
+	server.broadcastToRoom(roomID, "test-message", testData, ws1ClientID)
 
 	// ws2 should receive the message
 	ws2.SetReadDeadline(time.Now().Add(2 * time.Second))
