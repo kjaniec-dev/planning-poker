@@ -28,7 +28,7 @@ export function Timer({ timer, onStart, onStop }: TimerProps) {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!timer || !timer.endTime) {
+    if (!timer?.endTime) {
       setTimeLeft(null);
       return;
     }

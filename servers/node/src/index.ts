@@ -228,7 +228,7 @@ async function saveRoomState(roomId: string): Promise<void> {
   try {
     const roomState = {
       id: room.id,
-      participants: Array.from(room.participants.entries()).map(([id, p]) => ({
+      participants: Array.from(room.participants.entries()).map(([_id, p]) => ({
         id: p.id,
         name: p.name,
         vote: p.vote,
@@ -357,7 +357,9 @@ export function initWebSocketServer(httpServer: HTTPServer) {
     const redisOptions = {
       retryStrategy(times: number) {
         const delay = Math.min(times * 50, 2000);
-        console.log(`🔄 Redis reconnecting (attempt ${times}, delay: ${delay}ms)`);
+        console.log(
+          `🔄 Redis reconnecting (attempt ${times}, delay: ${delay}ms)`,
+        );
         return delay;
       },
       maxRetriesPerRequest: 3,
@@ -737,7 +739,10 @@ async function handleReveal(_ws: ExtendedWebSocket, data: { roomId: string }) {
   await saveRoomState(roomId);
 }
 
-async function handleReestimate(_ws: ExtendedWebSocket, data: { roomId: string }) {
+async function handleReestimate(
+  _ws: ExtendedWebSocket,
+  data: { roomId: string },
+) {
   const { roomId } = data;
   const room = rooms.get(roomId);
   if (!room) return;
@@ -823,7 +828,10 @@ async function handleUpdateStory(
   await saveRoomState(roomId);
 }
 
-async function handleSuspendVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
+async function handleSuspendVoting(
+  ws: ExtendedWebSocket,
+  data: { roomId: string },
+) {
   const { roomId } = data;
   const room = rooms.get(roomId);
   if (room) {
@@ -845,7 +853,10 @@ async function handleSuspendVoting(ws: ExtendedWebSocket, data: { roomId: string
   }
 }
 
-async function handleResumeVoting(ws: ExtendedWebSocket, data: { roomId: string }) {
+async function handleResumeVoting(
+  ws: ExtendedWebSocket,
+  data: { roomId: string },
+) {
   const { roomId } = data;
   const room = rooms.get(roomId);
   if (room) {
@@ -1097,7 +1108,10 @@ async function handleStartTimer(
   await saveRoomState(roomId);
 }
 
-async function handleStopTimer(_ws: ExtendedWebSocket, data: { roomId: string }) {
+async function handleStopTimer(
+  _ws: ExtendedWebSocket,
+  data: { roomId: string },
+) {
   const { roomId } = data;
   const room = rooms.get(roomId);
   if (!room) return;

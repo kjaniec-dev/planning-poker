@@ -66,11 +66,9 @@ export default function LandingPage() {
             Real-time planning poker
           </div>
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight leading-[1.05]">
-            Estimate{" "}
-            <span className="text-primary">together,</span>
+            Estimate <span className="text-primary">together,</span>
             <br />
-            ship with{" "}
-            <span className="text-secondary">confidence.</span>
+            ship with <span className="text-secondary">confidence.</span>
           </h1>
           <p className="text-lg text-muted-foreground max-w-xl">
             A premium estimation room for agile teams. Live voting, instant
