@@ -4,8 +4,6 @@ import {
   Ban,
   CheckCircle,
   Copy,
-  Eye,
-  EyeOff,
   History,
   LayoutDashboard,
   Link,
@@ -30,6 +28,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Tooltip,
@@ -364,31 +363,17 @@ export default function GameRoomPage() {
                   <TabsContent value="settings" className="mt-0 outline-none">
                     <div className="space-y-6 py-4">
                       <div className="flex flex-col gap-4">
-                        <div className="flex flex-col gap-4 p-4 rounded-lg border bg-muted/30">
-                          <div className="space-y-0.5">
+                        <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
+                          <div className="space-y-0.5 mr-4">
                             <h4 className="text-sm font-medium">Auto-Reveal</h4>
                             <p className="text-sm text-muted-foreground">
                               Automatically reveal cards when everyone has voted
                             </p>
                           </div>
-                          <Button
-                            variant={autoReveal ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => toggleAutoReveal(!autoReveal)}
-                            className="flex items-center gap-2 w-full sm:w-auto sm:self-start min-w-[120px]"
-                          >
-                            {autoReveal ? (
-                              <>
-                                <EyeOff className="h-4 w-4" />
-                                <span>Enabled</span>
-                              </>
-                            ) : (
-                              <>
-                                <Eye className="h-4 w-4" />
-                                <span>Disabled</span>
-                              </>
-                            )}
-                          </Button>
+                          <Switch
+                            checked={autoReveal}
+                            onChange={(e) => toggleAutoReveal(e.target.checked)}
+                          />
                         </div>
 
                         <div className="flex flex-col gap-4 p-4 rounded-lg border bg-muted/30">

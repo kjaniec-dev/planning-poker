@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { ConfirmDialog } from "@/app/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
+import { Stat } from "@/components/ui/stat";
 import { calculateAverage, calculateMedian } from "@/lib/utils";
 
 type Participant = {
@@ -180,25 +181,9 @@ export function Results({
             </ul>
             {(results?.avg || results?.median) && (
               <div className="grid grid-cols-2 gap-3 pt-2">
-                {results?.avg && (
-                  <div className="rounded-kj-xl border border-border/70 bg-surface px-4 py-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Average
-                    </div>
-                    <div className="mt-1 font-mono text-2xl font-bold text-secondary">
-                      {results.avg}
-                    </div>
-                  </div>
-                )}
+                {results?.avg && <Stat label="Average" value={results.avg} />}
                 {results?.median && (
-                  <div className="rounded-kj-xl border border-border/70 bg-surface px-4 py-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                      Median
-                    </div>
-                    <div className="mt-1 font-mono text-2xl font-bold text-secondary">
-                      {results.median}
-                    </div>
-                  </div>
+                  <Stat label="Median" value={results.median} />
                 )}
               </div>
             )}

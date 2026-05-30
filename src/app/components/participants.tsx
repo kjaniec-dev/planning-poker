@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { Ban, Check, Loader, Pause } from "lucide-react";
+import { Avatar } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Participant = {
@@ -68,9 +69,9 @@ export function Participants({ participants }: Props) {
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-bold text-muted-foreground ring-1 ring-border shadow-sm">
+                  <Avatar size="sm" tone="muted" status={p.connected !== false}>
                     {getInitials(p.name)}
-                  </div>
+                  </Avatar>
                   <div className="flex flex-col">
                     <span className="text-sm font-medium leading-none">
                       {p.name}

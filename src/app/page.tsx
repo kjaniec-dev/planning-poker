@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -78,29 +79,11 @@ export default function LandingPage() {
             {[
               { label: "Fibonacci 0 – 40", tone: "secondary" as const },
               { label: "Sub-second sync", tone: "primary" as const },
-              { label: "No account", tone: "muted" as const },
+              { label: "No account", tone: "neutral" as const },
             ].map((chip) => (
-              <span
-                key={chip.label}
-                className={`inline-flex items-center gap-1.5 rounded-kj-2xl border border-border/70 bg-card/60 px-3 py-1.5 text-xs font-medium ${
-                  chip.tone === "secondary"
-                    ? "text-secondary"
-                    : chip.tone === "primary"
-                      ? "text-primary"
-                      : "text-muted-foreground"
-                }`}
-              >
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    chip.tone === "secondary"
-                      ? "bg-secondary"
-                      : chip.tone === "primary"
-                        ? "bg-primary"
-                        : "bg-muted-foreground"
-                  }`}
-                />
+              <Badge key={chip.label} variant={chip.tone} dot>
                 {chip.label}
-              </span>
+              </Badge>
             ))}
           </div>
         </div>

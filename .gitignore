@@ -47,6 +47,8 @@ next-env.d.ts
 # AI (personal configs)
 .serena
 .mcp.json
+.antigravitycli/
+.claude/
 
 
 # Misc

@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "@kjaniec-dev/design/tailwind.css";
+@import "@kjaniec-dev/ui/ui.css";
 @import "tw-animate-css";
+
+@source "../../node_modules/@kjaniec-dev/ui/dist";
 
 @custom-variant dark (&:is(.dark *));
 

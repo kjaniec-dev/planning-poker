@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { Badge } from "@/components/ui/badge";
 import { calculateAverage } from "@/lib/utils";
 
 type HistoryRound = {
@@ -42,11 +43,7 @@ export function SessionHistory({ history }: Props) {
               <div className="font-medium text-sm break-words flex-1">
                 {round.story?.title || "Untitled Round"}
               </div>
-              {avg !== null && (
-                <div className="bg-primary/10 text-primary text-xs font-bold px-2 py-1 rounded">
-                  Avg: {avg}
-                </div>
-              )}
+              {avg !== null && <Badge variant="primary">Avg: {avg}</Badge>}
             </div>
             {round.story?.link && (
               <a
