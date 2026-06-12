@@ -1,5 +1,6 @@
 "use client";
 
+import { ErrorState, Skeleton } from "@kjaniec-dev/ui";
 import {
   Ban,
   CheckCircle,
@@ -98,7 +99,25 @@ export default function GameRoomPage() {
     timer,
     startTimer,
     stopTimer,
+    isConnected,
   } = useRealtime(room, currentName);
+
+  const [connectionError, setConnectionError] = useState(false);
+
+  useEffect(() => {
+    if (isConnected) {
+      setConnectionError(false);
+      return;
+    }
+
+    const timerId = setTimeout(() => {
+      if (!isConnected) {
+        setConnectionError(true);
+      }
+    }, 8000);
+
+    return () => clearTimeout(timerId);
+  }, [isConnected]);
 
   const me = participants.find((p) => p.name === currentName);
   const isSpectator = currentName === "Guest";
@@ -140,6 +159,53 @@ export default function GameRoomPage() {
   }, [revealed, getVoteKey, me, selection]);
 
   if (!mounted) return null;
+
+  if (connectionError) {
+    return (
+      <div className="w-full max-w-7xl mx-auto py-12 px-6 flex justify-center items-center">
+        <ErrorState
+          title="Connection Error"
+          message="We could not establish a connection to the realtime server. Please try again."
+          onRetry={() => {
+            window.location.reload();
+          }}
+          retryLabel="Reload Page"
+        />
+      </div>
+    );
+  }
+
+  if (!isConnected) {
+    return (
+      <div className="w-full max-w-7xl mx-auto py-6 px-6 pb-12 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-3">
+            <Skeleton
+              variant="rectangular"
+              height={100}
+              className="w-full rounded-xl"
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <Skeleton
+              variant="rectangular"
+              height={400}
+              className="w-full rounded-xl"
+            />
+          </div>
+          <div className="lg:col-span-1">
+            <Skeleton
+              variant="rectangular"
+              height={400}
+              className="w-full rounded-xl"
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Wrapper for vote that persists to sessionStorage
   const handleVote = (value: string) => {
@@ -198,253 +264,249 @@ export default function GameRoomPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <main className="flex-1 px-6 pb-12">
-        <div className="w-full max-w-7xl mx-auto py-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-3">
-              <StoryInfo
-                value={story ?? undefined}
-                onChange={(s) => {
-                  if (s) {
-                    updateStory(s);
-                  }
-                }}
-              />
-            </div>
-          </div>
+    <div className="w-full max-w-7xl mx-auto py-6 px-6 pb-12 space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-3">
+          <StoryInfo
+            value={story ?? undefined}
+            onChange={(s) => {
+              if (s) {
+                updateStory(s);
+              }
+            }}
+          />
         </div>
+      </div>
 
-        <div className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div>
-                      <CardTitle>Planning Poker</CardTitle>
-                      <CardDescription>
-                        Room {room} •{" "}
-                        {currentName ? `Welcome, ${currentName}.` : ""}
-                      </CardDescription>
-                    </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <CardTitle>Planning Poker</CardTitle>
+                    <CardDescription>
+                      Room {room} •{" "}
+                      {currentName ? `Welcome, ${currentName}.` : ""}
+                    </CardDescription>
+                  </div>
 
-                    <div className="flex items-center gap-2">
-                      <Timer
-                        timer={timer}
-                        onStart={startTimer}
-                        onStop={stopTimer}
-                      />
-                      <div className="h-6 w-px bg-border mx-1 hidden sm:block" />
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={copyGameUrl}
-                            className="flex items-center gap-2"
-                          >
-                            {linkCopied ? (
-                              <>
-                                <CheckCircle className="h-4 w-4 text-green-600" />
-                                <span>Copied!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy className="h-4 w-4" />
-                                <span>Copy Link</span>
-                              </>
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {linkCopied ? "Link copied!" : "Copy room link"}
-                        </TooltipContent>
-                      </Tooltip>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <Timer
+                      timer={timer}
+                      onStart={startTimer}
+                      onStop={stopTimer}
+                    />
+                    <div className="h-6 w-px bg-border mx-1 hidden sm:block" />
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={copyGameUrl}
+                          className="flex items-center gap-2"
+                        >
+                          {linkCopied ? (
+                            <>
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-4 w-4" />
+                              <span>Copy Link</span>
+                            </>
+                          )}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {linkCopied ? "Link copied!" : "Copy room link"}
+                      </TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
-              </CardHeader>
+              </div>
+            </CardHeader>
 
-              <CardContent>
-                <Tabs
-                  value={activeTab}
-                  onValueChange={setActiveTab}
-                  className="w-full"
-                >
-                  <TabsList className="grid w-full grid-cols-4 mb-6">
-                    <TabsTrigger
-                      value="voting"
-                      className="flex items-center gap-2"
-                    >
-                      <LayoutDashboard className="h-4 w-4" />
-                      <span className="hidden sm:inline">Voting</span>
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="results"
-                      className="flex items-center gap-2"
-                    >
-                      <CheckCircle className="h-4 w-4" />
-                      <span className="hidden sm:inline">Results</span>
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="history"
-                      className="flex items-center gap-2"
-                    >
-                      <History className="h-4 w-4" />
-                      <span className="hidden sm:inline">History</span>
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="settings"
-                      className="flex items-center gap-2"
-                    >
-                      <Settings className="h-4 w-4" />
-                      <span className="hidden sm:inline">Settings</span>
-                    </TabsTrigger>
-                  </TabsList>
+            <CardContent>
+              <Tabs
+                value={activeTab}
+                onValueChange={setActiveTab}
+                className="w-full"
+              >
+                <TabsList className="grid w-full grid-cols-4 mb-6">
+                  <TabsTrigger
+                    value="voting"
+                    className="flex items-center gap-2"
+                  >
+                    <LayoutDashboard className="h-4 w-4" />
+                    <span className="hidden sm:inline">Voting</span>
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="results"
+                    className="flex items-center gap-2"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    <span className="hidden sm:inline">Results</span>
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="history"
+                    className="flex items-center gap-2"
+                  >
+                    <History className="h-4 w-4" />
+                    <span className="hidden sm:inline">History</span>
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="settings"
+                    className="flex items-center gap-2"
+                  >
+                    <Settings className="h-4 w-4" />
+                    <span className="hidden sm:inline">Settings</span>
+                  </TabsTrigger>
+                </TabsList>
 
-                  <TabsContent value="voting" className="mt-0 outline-none">
-                    {isSpectator ? (
-                      <div className="flex h-40 flex-col items-center justify-center gap-4 text-center">
-                        <Ban className="size-12" />
-                        <div className="space-y-1">
-                          <p className="font-semibold">You are a spectator</p>
+                <TabsContent value="voting" className="mt-0 outline-none">
+                  {isSpectator ? (
+                    <div className="flex h-40 flex-col items-center justify-center gap-4 text-center">
+                      <Ban className="size-12" />
+                      <div className="space-y-1">
+                        <p className="font-semibold">You are a spectator</p>
+                        <p className="text-sm text-muted-foreground">
+                          Enter your name to start voting.
+                        </p>
+                      </div>
+                      <form
+                        className="flex w-full max-w-sm items-center space-x-2"
+                        onSubmit={(e) => {
+                          e.preventDefault();
+                          handleBecomeParticipant();
+                        }}
+                      >
+                        <Input
+                          placeholder="Your Name"
+                          value={newName}
+                          autoFocus={true}
+                          onChange={(e) => setNewName(e.target.value)}
+                        />
+                        <Button type="submit" disabled={!newName.trim()}>
+                          Join
+                        </Button>
+                      </form>
+                    </div>
+                  ) : (
+                    <VotingCards
+                      selection={selection}
+                      revealed={revealed}
+                      onSelect={(s) => setSelection(s)}
+                      vote={handleVote}
+                      resumeVoting={resumeVoting}
+                      suspendVoting={suspendVoting}
+                      isPaused={isPaused}
+                    />
+                  )}
+                </TabsContent>
+
+                <TabsContent value="results" className="mt-0 outline-none">
+                  <Results
+                    onReestimate={reestimate}
+                    participants={participants}
+                    revealed={revealed}
+                    onReveal={handleReveal}
+                    canReveal={!!selection}
+                    isPaused={isPaused}
+                    previousRound={history[history.length - 1] ?? undefined}
+                  />
+                </TabsContent>
+
+                <TabsContent value="history" className="mt-0 outline-none">
+                  <SessionHistory history={history} />
+                </TabsContent>
+
+                <TabsContent value="settings" className="mt-0 outline-none">
+                  <div className="space-y-6 py-4">
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center justify-between p-4 rounded-lg border bg-subtle">
+                        <div className="space-y-0.5 mr-4">
+                          <h4 className="text-sm font-medium">Auto-Reveal</h4>
                           <p className="text-sm text-muted-foreground">
-                            Enter your name to start voting.
+                            Automatically reveal cards when everyone has voted
                           </p>
                         </div>
-                        <form
-                          className="flex w-full max-w-sm items-center space-x-2"
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            handleBecomeParticipant();
-                          }}
-                        >
-                          <Input
-                            placeholder="Your Name"
-                            value={newName}
-                            autoFocus={true}
-                            onChange={(e) => setNewName(e.target.value)}
-                          />
-                          <Button type="submit" disabled={!newName.trim()}>
-                            Join
-                          </Button>
-                        </form>
+                        <Switch
+                          checked={autoReveal}
+                          onChange={(e) => toggleAutoReveal(e.target.checked)}
+                        />
                       </div>
-                    ) : (
-                      <VotingCards
-                        selection={selection}
-                        revealed={revealed}
-                        onSelect={(s) => setSelection(s)}
-                        vote={handleVote}
-                        resumeVoting={resumeVoting}
-                        suspendVoting={suspendVoting}
-                        isPaused={isPaused}
-                      />
-                    )}
-                  </TabsContent>
 
-                  <TabsContent value="results" className="mt-0 outline-none">
-                    <Results
-                      onReestimate={reestimate}
-                      participants={participants}
-                      revealed={revealed}
-                      onReveal={handleReveal}
-                      canReveal={!!selection}
-                      isPaused={isPaused}
-                      previousRound={history[history.length - 1] ?? undefined}
-                    />
-                  </TabsContent>
-
-                  <TabsContent value="history" className="mt-0 outline-none">
-                    <SessionHistory history={history} />
-                  </TabsContent>
-
-                  <TabsContent value="settings" className="mt-0 outline-none">
-                    <div className="space-y-6 py-4">
-                      <div className="flex flex-col gap-4">
-                        <div className="flex items-center justify-between p-4 rounded-lg border bg-muted/30">
-                          <div className="space-y-0.5 mr-4">
-                            <h4 className="text-sm font-medium">Auto-Reveal</h4>
-                            <p className="text-sm text-muted-foreground">
-                              Automatically reveal cards when everyone has voted
-                            </p>
-                          </div>
-                          <Switch
-                            checked={autoReveal}
-                            onChange={(e) => toggleAutoReveal(e.target.checked)}
-                          />
+                      <div className="flex flex-col gap-4 p-4 rounded-lg border bg-subtle">
+                        <div className="space-y-0.5">
+                          <h4 className="text-sm font-medium">Room Link</h4>
+                          <p className="text-sm text-muted-foreground truncate max-w-full">
+                            {typeof window !== "undefined"
+                              ? `${location.origin}/game/${room}`
+                              : ""}
+                          </p>
                         </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={copyGameUrl}
+                          className="flex items-center gap-2 w-full sm:w-auto sm:self-start"
+                        >
+                          {linkCopied ? (
+                            <>
+                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Link className="h-4 w-4" />
+                              <span>Copy URL</span>
+                            </>
+                          )}
+                        </Button>
+                      </div>
 
-                        <div className="flex flex-col gap-4 p-4 rounded-lg border bg-muted/30">
-                          <div className="space-y-0.5">
-                            <h4 className="text-sm font-medium">Room Link</h4>
-                            <p className="text-sm text-muted-foreground truncate max-w-full">
-                              {typeof window !== "undefined"
-                                ? `${location.origin}/game/${room}`
-                                : ""}
-                            </p>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={copyGameUrl}
-                            className="flex items-center gap-2 w-full sm:w-auto sm:self-start"
-                          >
-                            {linkCopied ? (
-                              <>
-                                <CheckCircle className="h-4 w-4 text-green-600" />
-                                <span>Copied!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Link className="h-4 w-4" />
-                                <span>Copy URL</span>
-                              </>
-                            )}
-                          </Button>
+                      <div className="flex flex-col gap-4 p-4 rounded-lg border bg-subtle">
+                        <div className="space-y-0.5">
+                          <h4 className="text-sm font-medium text-danger">
+                            Danger Zone
+                          </h4>
+                          <p className="text-sm text-muted-foreground">
+                            Reset the current round and clear all votes
+                          </p>
                         </div>
-
-                        <div className="flex flex-col gap-4 p-4 rounded-lg border bg-muted/30">
-                          <div className="space-y-0.5">
-                            <h4 className="text-sm font-medium text-danger">
-                              Danger Zone
-                            </h4>
-                            <p className="text-sm text-muted-foreground">
-                              Reset the current round and clear all votes
-                            </p>
-                          </div>
-                          <ConfirmDialog
-                            trigger={
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={isPaused}
-                                className="flex items-center gap-2 border-danger text-danger hover:bg-danger hover:text-white w-full sm:w-auto sm:self-start"
-                              >
-                                <RotateCcw className="h-4 w-4" />
-                                <span>Reset Game</span>
-                              </Button>
-                            }
-                            title="Are you sure?"
-                            description="This will reset the game, clear all votes, and start a fresh round"
-                            actionLabel="Reset"
-                            onAction={handleReset}
-                          />
-                        </div>
+                        <ConfirmDialog
+                          trigger={
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={isPaused}
+                              className="flex items-center gap-2 border-danger text-danger hover:bg-danger hover:text-white w-full sm:w-auto sm:self-start"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                              <span>Reset Game</span>
+                            </Button>
+                          }
+                          title="Are you sure?"
+                          description="This will reset the game, clear all votes, and start a fresh round"
+                          actionLabel="Reset"
+                          onAction={handleReset}
+                        />
                       </div>
                     </div>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="lg:col-span-1 space-y-6">
-            <Participants participants={participants} />
-          </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            </CardContent>
+          </Card>
         </div>
-      </main>
+
+        <div className="lg:col-span-1 space-y-6">
+          <Participants participants={participants} />
+        </div>
+      </div>
     </div>
   );
 }

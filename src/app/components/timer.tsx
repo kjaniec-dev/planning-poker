@@ -75,7 +75,7 @@ export function Timer({ timer, onStart, onStop }: TimerProps) {
   return (
     <div className="flex items-center gap-2">
       {timer && timeLeft !== null ? (
-        <div className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-md border">
+        <div className="flex items-center gap-2 bg-subtle px-3 py-1.5 rounded-md border">
           <TimerIcon
             className={`h-4 w-4 ${timeLeft < 10 ? "text-danger animate-pulse" : ""}`}
           />

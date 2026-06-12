@@ -1,5 +1,6 @@
 "use client";
 
+import { FormField } from "@kjaniec-dev/ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function LandingPage() {
@@ -51,7 +51,7 @@ export default function LandingPage() {
   };
 
   return (
-    <div className="relative min-h-[calc(100vh-8rem)] bg-background overflow-hidden">
+    <div className="relative w-full py-12 md:py-20 bg-canvas overflow-hidden">
       <div
         aria-hidden
         className="pointer-events-none absolute -top-32 -left-32 h-[420px] w-[420px] rounded-full bg-primary/20 blur-3xl"
@@ -62,7 +62,7 @@ export default function LandingPage() {
       />
       <div className="relative max-w-7xl mx-auto px-6 py-16 lg:py-24 grid lg:grid-cols-[1.1fr_1fr] gap-12 items-center">
         <div className="space-y-8">
-          <div className="inline-flex items-center gap-2 rounded-kj-2xl border border-border/80 bg-card/60 backdrop-blur px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+          <div className="inline-flex items-center gap-2 rounded-kj-2xl border border-border/80 bg-surface/60 backdrop-blur px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             <span className="inline-block h-2 w-2 rounded-full bg-primary shadow-[0_0_10px_var(--kj-primary)]" />
             Real-time planning poker
           </div>
@@ -122,15 +122,14 @@ export default function LandingPage() {
                       handleSubmit(true);
                     }}
                   >
-                    <div className="space-y-2">
-                      <Label htmlFor="name-create">Your Name</Label>
+                    <FormField label="Your Name">
                       <Input
                         id="name-create"
                         placeholder="Enter your name"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                       />
-                    </div>
+                    </FormField>
                     <Button
                       className="w-full mt-4 hover:shadow-kj-glow"
                       type="submit"
@@ -152,17 +151,18 @@ export default function LandingPage() {
                       handleSubmit(false);
                     }}
                   >
-                    <div className="space-y-2">
-                      <Label htmlFor="name-join">Your Name</Label>
+                    <FormField label="Your Name">
                       <Input
                         id="name-join"
                         placeholder="Enter your name"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                       />
-                    </div>
-                    <div className="space-y-2 mt-2">
-                      <Label htmlFor="room-code">Room Code</Label>
+                    </FormField>
+                    <FormField
+                      label="Room Code"
+                      hint="8‑character code, e.g. AB12CD34"
+                    >
                       <Input
                         id="room-code"
                         placeholder="Enter room code"
@@ -173,11 +173,7 @@ export default function LandingPage() {
                         className="uppercase"
                         maxLength={8}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        8‑character code, e.g.{" "}
-                        <span className="font-mono">AB12CD34</span>
-                      </p>
-                    </div>
+                    </FormField>
                     <Button
                       className="w-full mt-4 hover:shadow-kj-glow"
                       type="submit"

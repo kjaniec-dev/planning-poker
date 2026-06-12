@@ -1,5 +1,6 @@
 "use client";
 
+import { FormField } from "@kjaniec-dev/ui";
 import { Edit, ExternalLink, Save, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -89,40 +90,45 @@ export function StoryInfo({ value, onChange }: Props) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="story-title">Title</Label>
-          {isEditing ? (
+        {isEditing ? (
+          <FormField label="Title">
             <Input
               id="story-title"
               placeholder="Enter story title..."
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
-          ) : (
-            <div className="h-9 px-3 py-1 border rounded-md bg-muted/30 flex items-center text-base md:text-sm">
+          </FormField>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="story-title">Title</Label>
+            <div className="h-9 px-3 py-1 border rounded-md bg-subtle flex items-center text-base md:text-sm">
               {title || (
                 <span className="text-muted-foreground">No title set</span>
               )}
             </div>
-          )}
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="story-description">Link</Label>
-          {isEditing ? (
+          </div>
+        )}
+
+        {isEditing ? (
+          <FormField label="Link">
             <Input
               id="story-description"
               placeholder="Enter the link to your story..."
               value={link}
               onChange={(e) => setLink(e.target.value)}
             />
-          ) : (
-            <div className="h-9 px-3 py-1 border rounded-md bg-muted/30 flex items-center whitespace-pre-wrap text-base md:text-sm">
+          </FormField>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="story-description">Link</Label>
+            <div className="h-9 px-3 py-1 border rounded-md bg-subtle flex items-center whitespace-pre-wrap text-base md:text-sm">
               {link || (
                 <span className="text-muted-foreground">No link set</span>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

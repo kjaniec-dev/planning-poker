@@ -82,7 +82,7 @@ export function VotingCards({
           </Button>
         )}
         {isPaused && (
-          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded sm:ml-2">
+          <span className="text-xs text-muted-foreground bg-subtle px-2 py-1 rounded sm:ml-2">
             {`You are paused and won’t be counted from ${selection ? "next" : "this"} round.`}
           </span>
         )}
@@ -123,7 +123,7 @@ export function VotingCards({
                 ${
                   isSelected
                     ? "bg-primary text-primary-foreground border-primary shadow-kj-glow scale-105 z-10"
-                    : "bg-card text-foreground border-border hover:border-primary/60 hover:bg-surface hover:-translate-y-0.5"
+                    : "bg-surface text-foreground border-border hover:border-primary/60 hover:bg-surface hover:-translate-y-0.5"
                 }
                 `}
               >

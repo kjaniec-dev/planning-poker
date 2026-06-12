@@ -45,7 +45,7 @@ export function Participants({ participants }: Props) {
             {votedCount}/{votingParticipants.length}
           </span>
         </div>
-        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-subtle">
           <motion.div
             className="h-full bg-secondary shadow-[0_0_12px_var(--kj-secondary)]"
             initial={{ width: 0 }}

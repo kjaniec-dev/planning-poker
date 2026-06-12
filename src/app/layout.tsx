@@ -37,7 +37,7 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange
         >
-          <div className="min-h-screen bg-background flex flex-col">
+          <div className="min-h-screen bg-canvas flex flex-col">
             <nav className="border-b border-border/60">
               <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
                 <Link href="/" className="flex items-center gap-3 group">

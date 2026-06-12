@@ -1,9 +1,9 @@
 "use client";
 
+import { MetricCard } from "@kjaniec-dev/ui";
 import { useMemo } from "react";
 import { ConfirmDialog } from "@/app/components/confirm-dialog";
 import { Button } from "@/components/ui/button";
-import { Stat } from "@/components/ui/stat";
 import { calculateAverage, calculateMedian } from "@/lib/utils";
 
 type Participant = {
@@ -181,9 +181,11 @@ export function Results({
             </ul>
             {(results?.avg || results?.median) && (
               <div className="grid grid-cols-2 gap-3 pt-2">
-                {results?.avg && <Stat label="Average" value={results.avg} />}
+                {results?.avg && (
+                  <MetricCard title="Average" value={results.avg} />
+                )}
                 {results?.median && (
-                  <Stat label="Median" value={results.median} />
+                  <MetricCard title="Median" value={results.median} />
                 )}
               </div>
             )}
