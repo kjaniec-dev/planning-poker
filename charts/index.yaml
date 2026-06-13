@@ -2,8 +2,33 @@ apiVersion: v1
 entries:
   planning-poker:
   - apiVersion: v2
+    appVersion: 1.2.2
+    created: "2026-06-13T12:10:12.439165603Z"
+    description: A real-time collaborative estimation tool for agile teams with WebSocket
+      synchronization
+    digest: ab4c676b7206b1f3c0ba93de9d70d9b927e9bcc3260311a0b6df576036cd7f4f
+    home: https://github.com/kjaniec-dev/planning-poker
+    icon: https://raw.githubusercontent.com/kjaniec-dev/planning-poker/main/public/logo.svg
+    keywords:
+    - planning-poker
+    - scrum
+    - agile
+    - estimation
+    - websocket
+    - realtime
+    maintainers:
+    - email: contact@kjaniec.dev
+      name: kjaniec-dev
+    name: planning-poker
+    sources:
+    - https://github.com/kjaniec-dev/planning-poker
+    type: application
+    urls:
+    - https://kjaniec-dev.github.io/planning-poker/charts/planning-poker-1.2.2.tgz
+    version: 1.2.2
+  - apiVersion: v2
     appVersion: 1.2.1
-    created: "2026-05-30T20:31:17.025821909Z"
+    created: "2026-06-13T12:10:12.438472466Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: 733a992b2522e65d060a23125785ce60d0cb175586bd79733b1295d4a9be09ad
@@ -28,7 +53,7 @@ entries:
     version: 1.2.1
   - apiVersion: v2
     appVersion: 1.2.0
-    created: "2026-05-30T20:31:17.02509633Z"
+    created: "2026-06-13T12:10:12.437779599Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: fac8240a8febc967c6bab1d90d4dbf56169ccc5d7820d3f40660308e5cc6b303
@@ -53,7 +78,7 @@ entries:
     version: 1.2.0
   - apiVersion: v2
     appVersion: 1.1.3
-    created: "2026-05-30T20:31:17.024369018Z"
+    created: "2026-06-13T12:10:12.437069376Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: fa48e59e3b596d6b06302aea19a20f62df9e71042928b7c52b23f22fbe7cdd88
@@ -78,7 +103,7 @@ entries:
     version: 1.1.3
   - apiVersion: v2
     appVersion: 1.1.1
-    created: "2026-05-30T20:31:17.023735514Z"
+    created: "2026-06-13T12:10:12.436452803Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: 506e67028ef5be8946afebd5ecb784fb18bcd8d64702f945a0eaa39c7f3142d6
@@ -103,7 +128,7 @@ entries:
     version: 1.1.1
   - apiVersion: v2
     appVersion: 1.1.0
-    created: "2026-05-30T20:31:17.023064275Z"
+    created: "2026-06-13T12:10:12.435817302Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: 55e51ed1f76796935e971609df7cc119be4180f8223e9acb0020ed8f1eb60e22
@@ -128,7 +153,7 @@ entries:
     version: 1.1.0
   - apiVersion: v2
     appVersion: 1.0.7
-    created: "2026-05-30T20:31:17.021773497Z"
+    created: "2026-06-13T12:10:12.435202301Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: 72883d393fd6464b5eb9105537039559974502de72953f51f49d9ad89c03a1b6
@@ -153,7 +178,7 @@ entries:
     version: 1.0.7
   - apiVersion: v2
     appVersion: 1.0.6
-    created: "2026-05-30T20:31:17.021052264Z"
+    created: "2026-06-13T12:10:12.434359059Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: 4732053b615fbefb9448b3032ad7b5c02069039bb9fd73d0e3152ebe229495e0
@@ -178,7 +203,7 @@ entries:
     version: 1.0.6
   - apiVersion: v2
     appVersion: 1.0.5
-    created: "2026-05-30T20:31:17.020404078Z"
+    created: "2026-06-13T12:10:12.433023796Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: 56063bad5d052952795c1fdce7926255a6e113acb8396d5c41eb896e4873100a
@@ -203,7 +228,7 @@ entries:
     version: 1.0.5
   - apiVersion: v2
     appVersion: 1.0.4
-    created: "2026-05-30T20:31:17.019763484Z"
+    created: "2026-06-13T12:10:12.432411539Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: 720eb9b0a3946bc1d60fd825d9707643a75d27f0693dad195d161cf932dcbfcf
@@ -228,7 +253,7 @@ entries:
     version: 1.0.4
   - apiVersion: v2
     appVersion: 1.0.3
-    created: "2026-05-30T20:31:17.019131392Z"
+    created: "2026-06-13T12:10:12.431798071Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: c286e89734705f62dda945258c8dc0d59369e1e515ff4b065db4ce78a8022010
@@ -253,7 +278,7 @@ entries:
     version: 1.0.3
   - apiVersion: v2
     appVersion: 1.0.2
-    created: "2026-05-30T20:31:17.018459011Z"
+    created: "2026-06-13T12:10:12.431172895Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: 5bec779dc87d9389d7d9661653accdcf56d851ecbaff831dadbe6cf3a1283bcb
@@ -278,7 +303,7 @@ entries:
     version: 1.0.2
   - apiVersion: v2
     appVersion: 1.0.0
-    created: "2026-05-30T20:31:17.017781583Z"
+    created: "2026-06-13T12:10:12.430494329Z"
     description: A real-time collaborative estimation tool for agile teams with WebSocket
       synchronization
     digest: 722cd75c67f50151afd2349774b2af49df1aeb531e93ed2de7d79c62bfceec5e
@@ -301,4 +326,4 @@ entries:
     urls:
     - https://kjaniec-dev.github.io/planning-poker/charts/planning-poker-1.0.0.tgz
     version: 1.0.0
-generated: "2026-05-30T20:31:17.016869939Z"
+generated: "2026-06-13T12:10:12.429650106Z"
