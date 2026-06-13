@@ -1,18 +1,8 @@
 "use client";
 
-import type React from "react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+import { ConfirmDialog as LibConfirmDialog } from "@kjaniec-dev/ui";
+import React, { useState } from "react";
+import type { Button } from "@/components/ui/button";
 
 type ConfirmDialogProps = {
   trigger: React.ReactNode;
@@ -26,41 +16,57 @@ type ConfirmDialogProps = {
   actionDisabled?: boolean;
 };
 
+type TriggerProps = {
+  onClick?: React.MouseEventHandler;
+  disabled?: boolean;
+};
+
 export function ConfirmDialog({
   trigger,
   title,
-  description,
+  description = "",
   actionLabel = "Confirm",
   cancelLabel = "Cancel",
   onAction,
-  actionVariant,
-  actionSize,
   actionDisabled,
 }: ConfirmDialogProps) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const handleConfirm = () => {
+    onAction();
+    setIsOpen(false);
+  };
+
+  const triggerElement = React.isValidElement(trigger)
+    ? React.cloneElement(trigger as React.ReactElement<TriggerProps>, {
+        onClick: (e: React.MouseEvent) => {
+          if (actionDisabled) return;
+          const element = trigger as React.ReactElement<TriggerProps>;
+          // Call original onClick if it exists
+          if (element.props && typeof element.props.onClick === "function") {
+            element.props.onClick(e);
+          }
+          setIsOpen(true);
+        },
+        disabled:
+          actionDisabled ||
+          (trigger as React.ReactElement<TriggerProps>).props?.disabled,
+      })
+    : trigger;
+
   return (
-    <AlertDialog>
-      <AlertDialogTrigger asChild>{trigger}</AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>{title}</AlertDialogTitle>
-          {description && (
-            <AlertDialogDescription>{description}</AlertDialogDescription>
-          )}
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
-          <AlertDialogAction asChild>
-            <Button
-              size={actionSize}
-              variant={actionVariant}
-              disabled={actionDisabled}
-              onClick={onAction}
-            >
-              {actionLabel}
-            </Button>
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <>
+      {triggerElement}
+      <LibConfirmDialog
+        open={isOpen}
+        onClose={() => setIsOpen(false)}
+        onConfirm={handleConfirm}
+        title={title}
+        description={description}
+        confirmLabel={actionLabel}
+        cancelLabel={cancelLabel}
+        tone="primary"
+      />
+    </>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormField } from "@kjaniec-dev/ui";
+import { TextField } from "@kjaniec-dev/ui";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function LandingPage() {
@@ -122,14 +121,13 @@ export default function LandingPage() {
                       handleSubmit(true);
                     }}
                   >
-                    <FormField label="Your Name">
-                      <Input
-                        id="name-create"
-                        placeholder="Enter your name"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                      />
-                    </FormField>
+                    <TextField
+                      label="Your Name"
+                      id="name-create"
+                      placeholder="Enter your name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
                     <Button
                       className="w-full mt-4 hover:shadow-kj-glow"
                       type="submit"
@@ -151,29 +149,25 @@ export default function LandingPage() {
                       handleSubmit(false);
                     }}
                   >
-                    <FormField label="Your Name">
-                      <Input
-                        id="name-join"
-                        placeholder="Enter your name"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                      />
-                    </FormField>
-                    <FormField
+                    <TextField
+                      label="Your Name"
+                      id="name-join"
+                      placeholder="Enter your name"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                    />
+                    <TextField
                       label="Room Code"
                       hint="8‑character code, e.g. AB12CD34"
-                    >
-                      <Input
-                        id="room-code"
-                        placeholder="Enter room code"
-                        value={roomCode}
-                        onChange={(e) =>
-                          setRoomCode(e.target.value.toUpperCase())
-                        }
-                        className="uppercase"
-                        maxLength={8}
-                      />
-                    </FormField>
+                      id="room-code"
+                      placeholder="Enter room code"
+                      value={roomCode}
+                      onChange={(e) =>
+                        setRoomCode(e.target.value.toUpperCase())
+                      }
+                      className="uppercase"
+                      maxLength={8}
+                    />
                     <Button
                       className="w-full mt-4 hover:shadow-kj-glow"
                       type="submit"

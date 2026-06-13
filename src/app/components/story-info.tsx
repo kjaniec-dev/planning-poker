@@ -1,11 +1,10 @@
 "use client";
 
-import { FormField } from "@kjaniec-dev/ui";
+import { TextField } from "@kjaniec-dev/ui";
 import { Edit, ExternalLink, Save, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 type Story = { title: string; link: string } | null;
@@ -91,14 +90,13 @@ export function StoryInfo({ value, onChange }: Props) {
       </CardHeader>
       <CardContent className="space-y-4">
         {isEditing ? (
-          <FormField label="Title">
-            <Input
-              id="story-title"
-              placeholder="Enter story title..."
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </FormField>
+          <TextField
+            label="Title"
+            id="story-title"
+            placeholder="Enter story title..."
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
         ) : (
           <div className="space-y-2">
             <Label htmlFor="story-title">Title</Label>
@@ -111,14 +109,13 @@ export function StoryInfo({ value, onChange }: Props) {
         )}
 
         {isEditing ? (
-          <FormField label="Link">
-            <Input
-              id="story-description"
-              placeholder="Enter the link to your story..."
-              value={link}
-              onChange={(e) => setLink(e.target.value)}
-            />
-          </FormField>
+          <TextField
+            label="Link"
+            id="story-description"
+            placeholder="Enter the link to your story..."
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+          />
         ) : (
           <div className="space-y-2">
             <Label htmlFor="story-description">Link</Label>
