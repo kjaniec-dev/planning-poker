@@ -4,8 +4,10 @@
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-07-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "routes": [{"pattern": "planning-poker.kjaniec.dev", "custom_domain": true}],
-  "observability": {"enabled": true},
+  "routes": [
+    { "pattern": "planning-poker.kjaniec.dev", "custom_domain": true }
+  ],
+  "observability": { "enabled": true },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
