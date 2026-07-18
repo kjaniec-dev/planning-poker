@@ -36,6 +36,11 @@ yarn-error.log*
 # vercel
 .vercel
 
+# cloudflare
+.open-next/
+.wrangler/
+cloudflare-env.d.ts
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -53,3 +58,6 @@ next-env.d.ts
 
 # Misc
 local-tls/
+
+# Local agent worktrees
+.worktrees/
