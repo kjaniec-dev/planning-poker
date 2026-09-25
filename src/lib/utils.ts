@@ -24,3 +24,12 @@ export function calculateMedian(numbers: number[]): number | null {
 
   return Math.round(median * 100) / 100;
 }
+
+export function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}

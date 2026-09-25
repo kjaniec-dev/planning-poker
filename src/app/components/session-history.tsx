@@ -1,6 +1,6 @@
 "use client";
 
-import { DataTable, type DataTableColumn } from "@kjaniec-dev/ui";
+import { DataTable, type DataTableColumn, Sparkline } from "@kjaniec-dev/ui";
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { calculateAverage } from "@/lib/utils";
@@ -16,10 +16,31 @@ type Props = {
   history: HistoryRound[];
 };
 
+function roundAverage(round: HistoryRound): number | null {
+  const numericVotes = round.participants.reduce<number[]>((acc, p) => {
+    const num = Number(p.vote);
+    if (!Number.isNaN(num) && p.vote) {
+      acc.push(num);
+    }
+    return acc;
+  }, []);
+  return calculateAverage(numericVotes);
+}
+
 export function SessionHistory({ history }: Props) {
   const sortedHistory = useMemo(() => {
     return [...history].sort((a, b) => b.revealedAt - a.revealedAt);
   }, [history]);
+
+  // Chronological averages for the trend line (rounds without numeric votes are skipped).
+  const averageTrend = useMemo(
+    () =>
+      [...history]
+        .sort((a, b) => a.revealedAt - b.revealedAt)
+        .map(roundAverage)
+        .filter((avg): avg is number => avg !== null),
+    [history],
+  );
 
   const columns = useMemo<DataTableColumn<HistoryRound>[]>(
     () => [
@@ -35,7 +56,7 @@ export function SessionHistory({ history }: Props) {
                 href={round.story.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-blue-500 hover:underline block truncate max-w-[240px]"
+                className="text-xs text-primary hover:underline block truncate max-w-[240px]"
               >
                 {round.story.link}
               </a>
@@ -46,15 +67,7 @@ export function SessionHistory({ history }: Props) {
       {
         header: "Average",
         accessor: (round) => {
-          const numericVotes = round.participants.reduce<number[]>((acc, p) => {
-            const num = Number(p.vote);
-            if (!Number.isNaN(num) && p.vote) {
-              acc.push(num);
-            }
-            return acc;
-          }, []);
-          const avg =
-            numericVotes.length > 0 ? calculateAverage(numericVotes) : null;
+          const avg = roundAverage(round);
           return avg !== null ? (
             <Badge variant="primary">Avg: {avg}</Badge>
           ) : (
@@ -94,7 +107,27 @@ export function SessionHistory({ history }: Props) {
   );
 
   return (
-    <div className="py-2">
+    <div className="space-y-4 py-2">
+      {averageTrend.length >= 2 && (
+        <div className="flex items-center gap-4 rounded-kj-lg border bg-subtle px-4 py-3">
+          <div className="shrink-0">
+            <div className="text-xs font-medium text-muted-foreground">
+              Average trend
+            </div>
+            <div className="font-mono text-lg font-semibold">
+              {averageTrend[averageTrend.length - 1]}
+            </div>
+          </div>
+          <Sparkline
+            data={averageTrend}
+            variant="area"
+            color="chart1"
+            height={40}
+            ariaLabel={`Average estimate across ${averageTrend.length} rounds`}
+            className="min-w-0 flex-1"
+          />
+        </div>
+      )}
       <DataTable
         columns={columns}
         data={sortedHistory}

@@ -1,10 +1,12 @@
 "use client";
 
-import { MetricCard } from "@kjaniec-dev/ui";
+import { BarChart, MetricCard, SectionHeader } from "@kjaniec-dev/ui";
 import { useMemo } from "react";
 import { ConfirmDialog } from "@/app/components/confirm-dialog";
+import { Avatar } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { calculateAverage, calculateMedian } from "@/lib/utils";
+import { calculateAverage, calculateMedian, getInitials } from "@/lib/utils";
 
 type Participant = {
   id: string;
@@ -12,6 +14,8 @@ type Participant = {
   vote: string | null;
   paused?: boolean;
 };
+
+type RoundParticipant = { id: string; name: string; vote: string | null };
 
 type Props = {
   participants: Participant[];
@@ -23,9 +27,95 @@ type Props = {
   previousRound?: {
     id: string;
     story: { title: string; link: string } | null;
-    participants: Array<{ id: string; name: string; vote: string | null }>;
+    participants: RoundParticipant[];
   } | null;
 };
+
+type RoundSummary = {
+  distribution: Array<{ vote: string; count: number }>;
+  avg: number | null;
+  median: number | null;
+  agreement: number | null;
+};
+
+const NO_VOTE = "—";
+
+function compareVotes(a: string, b: string) {
+  const na = Number(a);
+  const nb = Number(b);
+  const aNum = !Number.isNaN(na);
+  const bNum = !Number.isNaN(nb);
+  if (aNum && bNum) return na - nb;
+  if (aNum) return -1;
+  if (bNum) return 1;
+  return a.localeCompare(b);
+}
+
+export function summarizeRound(participants: RoundParticipant[]): RoundSummary {
+  const counts = new Map<string, number>();
+  const numericVotes: number[] = [];
+  let castVotes = 0;
+
+  // Participants without a vote (spectators, late joiners) are left out of
+  // the chart and stats.
+  for (const p of participants) {
+    if (!p.vote) continue;
+    counts.set(p.vote, (counts.get(p.vote) ?? 0) + 1);
+    castVotes++;
+    const num = Number(p.vote);
+    if (!Number.isNaN(num)) numericVotes.push(num);
+  }
+
+  const distribution = Array.from(counts.entries())
+    .sort((a, b) => compareVotes(a[0], b[0]))
+    .map(([vote, count]) => ({ vote, count }));
+
+  // Share of cast votes that landed on the most popular card.
+  const topCount = Math.max(0, ...distribution.map((d) => d.count));
+  const agreement =
+    castVotes > 0 ? Math.round((topCount / castVotes) * 100) : null;
+
+  return {
+    distribution,
+    avg: calculateAverage(numericVotes),
+    median: calculateMedian(numericVotes),
+    agreement,
+  };
+}
+
+function RoundBreakdown({ summary }: { summary: RoundSummary }) {
+  const maxCount = Math.max(1, ...summary.distribution.map((d) => d.count));
+
+  return (
+    <div className="space-y-4">
+      <BarChart
+        data={summary.distribution}
+        index="vote"
+        series={[{ key: "count", label: "Votes", color: "chart1" }]}
+        height={220}
+        barMaxWidth={56}
+        // Counts are whole numbers: keep the nice-scale step >= 1 and hide
+        // fractional ticks that appear when only one person voted.
+        yTicksCount={Math.min(maxCount, 5)}
+        showLegend={false}
+        valueFormatter={(v) => (Number.isInteger(v) ? String(v) : "")}
+        emptyMessage="No votes to display"
+        ariaLabel="Vote distribution"
+        caption="Number of participants per card"
+      />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <MetricCard title="Average" value={summary.avg ?? NO_VOTE} />
+        <MetricCard title="Median" value={summary.median ?? NO_VOTE} />
+        <MetricCard
+          className="col-span-2 sm:col-span-1"
+          title="Agreement"
+          value={summary.agreement !== null ? `${summary.agreement}%` : NO_VOTE}
+          description="Votes on the most picked card"
+        />
+      </div>
+    </div>
+  );
+}
 
 export function Results({
   participants,
@@ -36,175 +126,85 @@ export function Results({
   onReestimate,
   previousRound,
 }: Props) {
-  const results = useMemo(() => {
-    if (!revealed) return null;
-    const roundParticipants = previousRound?.participants || [];
-    const counts = new Map<string, number>();
-    for (const p of roundParticipants) {
-      const v = p.vote ?? "—";
-      counts.set(v, (counts.get(v) ?? 0) + 1);
-    }
-    const entries = Array.from(counts.entries()).sort((a, b) => {
-      const na = Number(a[0]),
-        nb = Number(b[0]);
-      const aNum = !Number.isNaN(na),
-        bNum = !Number.isNaN(nb);
-      if (aNum && bNum) return na - nb;
-      if (aNum) return -1;
-      if (bNum) return 1;
-      return a[0].localeCompare(b[0]);
-    });
-    const numericVotes = roundParticipants.reduce<number[]>((acc, p) => {
-      const num = Number(p.vote);
-      if (!Number.isNaN(num) && p.vote) {
-        acc.push(num);
-      }
-      return acc;
-    }, []);
-    const avg = numericVotes.length > 0 ? calculateAverage(numericVotes) : null;
-    const median =
-      numericVotes.length > 0 ? calculateMedian(numericVotes) : null;
-
-    return { entries, avg, median };
-  }, [revealed, previousRound]);
+  const summary = useMemo(
+    () => (previousRound ? summarizeRound(previousRound.participants) : null),
+    [previousRound],
+  );
 
   return (
     <div className="space-y-6 py-4">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-secondary">
-            Round summary
-          </span>
-          <h3 className="text-2xl font-bold leading-tight tracking-tight mt-1">
-            Results
-          </h3>
-          <p className="text-sm text-muted-foreground mt-1">
-            {revealed
-              ? "Votes distribution"
-              : previousRound
-                ? "Previous results (re-estimating)"
-                : "Reveal to see results"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <ConfirmDialog
-            trigger={
-              <Button size="sm" disabled={!canReveal || revealed || isPaused}>
-                Reveal
-              </Button>
-            }
-            title="Reveal all votes?"
-            description="This will show everyone's vote. This action cannot be undone."
-            actionLabel="Reveal"
-            onAction={onReveal}
-          />
-          {revealed && onReestimate && (
+      <SectionHeader
+        kicker="Round summary"
+        title="Results"
+        headingLevel="h3"
+        description={
+          revealed
+            ? "Votes distribution"
+            : previousRound
+              ? "Previous results (re-estimating)"
+              : "Reveal to see results"
+        }
+        actions={
+          <>
             <ConfirmDialog
               trigger={
-                <Button size="sm" variant="outline" disabled={isPaused}>
-                  Re-estimate
+                <Button size="sm" disabled={!canReveal || revealed || isPaused}>
+                  Reveal
                 </Button>
               }
-              title="Wanna re-estimate?"
-              description="This will clear the current selection of the card."
-              actionLabel="Continue"
-              onAction={onReestimate}
+              title="Reveal all votes?"
+              description="This will show everyone's vote. This action cannot be undone."
+              actionLabel="Reveal"
+              onAction={onReveal}
             />
-          )}
-        </div>
-      </div>
+            {revealed && onReestimate && (
+              <ConfirmDialog
+                trigger={
+                  <Button size="sm" variant="outline" disabled={isPaused}>
+                    Re-estimate
+                  </Button>
+                }
+                title="Wanna re-estimate?"
+                description="This will clear the current selection of the card."
+                actionLabel="Continue"
+                onAction={onReestimate}
+              />
+            )}
+          </>
+        }
+      />
 
-      <div className="pt-4 border-t">
-        {!revealed ? (
-          previousRound ? (
-            <div className="space-y-4">
+      <div className="border-t pt-4">
+        {!summary && !revealed ? (
+          <div className="text-sm text-muted-foreground">No results yet.</div>
+        ) : (
+          <div className="space-y-6">
+            {!revealed && (
               <div className="text-sm text-muted-foreground">
                 Previous round results
               </div>
-              <ul className="space-y-2">
-                <li className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground underline">
-                    Vote
-                  </span>
-                  <span className="text-sm text-muted-foreground underline">
-                    Count
-                  </span>
-                </li>
-                {Array.from(
-                  previousRound.participants
-                    .reduce<Map<string, number>>((acc, p) => {
-                      const v = p.vote ?? "—";
-                      acc.set(v, (acc.get(v) ?? 0) + 1);
-                      return acc;
-                    }, new Map())
-                    .entries(),
-                ).map(([value, count]) => (
-                  <li key={value} className="flex items-center justify-between">
-                    <span className="font-mono text-lg">
-                      {value === "☕" ? (
-                        <span className="text-4xl leading-none">☕</span>
-                      ) : (
-                        value
-                      )}
-                    </span>
-                    <span className="text-muted-foreground">{count}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            <div className="text-sm text-muted-foreground">No results yet.</div>
-          )
-        ) : (
-          <div className="space-y-4">
-            <ul className="space-y-2">
-              <li className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground underline">
-                  Vote
-                </span>
-                <span className="text-sm text-muted-foreground underline">
-                  Count
-                </span>
-              </li>
-              {results?.entries.map(([value, count]) => (
-                <li key={value} className="flex items-center justify-between">
-                  <span className="font-mono text-lg">
-                    {value === "☕" ? (
-                      <span className="text-4xl leading-none">☕</span>
-                    ) : (
-                      value
-                    )}
-                  </span>
-                  <span className="text-muted-foreground">{count}</span>
-                </li>
-              ))}
-            </ul>
-            {(results?.avg || results?.median) && (
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                {results?.avg && (
-                  <MetricCard title="Average" value={results.avg} />
-                )}
-                {results?.median && (
-                  <MetricCard title="Median" value={results.median} />
-                )}
-              </div>
             )}
-            <div className="pt-2 border-t">
-              <ul className="mt-2 space-y-1">
+            {summary && <RoundBreakdown summary={summary} />}
+            {revealed && (
+              <ul className="space-y-2 border-t pt-4">
                 {participants.map((p) => (
-                  <li key={p.id} className="flex justify-between text-sm">
-                    <span>{p.name}</span>
-                    <span className="font-mono">
-                      {p.vote === "☕" ? (
-                        <span className="text-2xl leading-none">☕</span>
-                      ) : (
-                        (p.vote ?? "—")
-                      )}
+                  <li
+                    key={p.id}
+                    className="flex items-center justify-between gap-3 text-sm"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <Avatar size="sm" tone="muted">
+                        {getInitials(p.name)}
+                      </Avatar>
+                      <span className="truncate">{p.name}</span>
                     </span>
+                    <Badge variant={p.vote ? "primary" : "neutral"}>
+                      {p.vote ?? NO_VOTE}
+                    </Badge>
                   </li>
                 ))}
               </ul>
-            </div>
+            )}
           </div>
         )}
       </div>

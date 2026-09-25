@@ -1,9 +1,17 @@
 "use client";
 
+import { ProgressRing } from "@kjaniec-dev/ui";
 import { AnimatePresence, motion } from "framer-motion";
 import { Ban, Check, Loader, Pause } from "lucide-react";
 import { Avatar } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { getInitials } from "@/lib/utils";
 
 type Participant = {
   id: string;
@@ -17,41 +25,42 @@ type Props = {
   participants: Participant[];
 };
 
-function getInitials(name: string) {
-  return name
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
-}
-
 export function Participants({ participants }: Props) {
   const votingParticipants = participants.filter(
     (p) => p.name !== "Guest" && !p.paused && (p.connected ?? true),
   );
   const votedCount = votingParticipants.filter((p) => p.vote != null).length;
-  const progress =
-    votingParticipants.length > 0
-      ? (votedCount / votingParticipants.length) * 100
-      : 0;
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Participants</CardTitle>
-          <span className="text-sm font-medium text-muted-foreground">
-            {votedCount}/{votingParticipants.length}
-          </span>
-        </div>
-        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-subtle">
-          <motion.div
-            className="h-full bg-secondary shadow-[0_0_12px_var(--kj-secondary)]"
-            initial={{ width: 0 }}
-            animate={{ width: `${progress}%` }}
-            transition={{ duration: 0.5, ease: "easeOut" }}
-          />
+        <div className="flex items-center justify-between gap-4">
+          <div className="space-y-1">
+            <CardTitle>Participants</CardTitle>
+            <CardDescription>
+              {votingParticipants.length === 0
+                ? "Waiting for voters"
+                : votedCount === votingParticipants.length
+                  ? "Everyone has voted"
+                  : `${votedCount} of ${votingParticipants.length} voted`}
+            </CardDescription>
+          </div>
+          <ProgressRing
+            value={votedCount}
+            max={Math.max(votingParticipants.length, 1)}
+            size="md"
+            tone={
+              votingParticipants.length > 0 &&
+              votedCount === votingParticipants.length
+                ? "success"
+                : "secondary"
+            }
+            aria-label="Voting progress"
+          >
+            <span className="text-xs font-semibold tabular-nums">
+              {votedCount}/{votingParticipants.length}
+            </span>
+          </ProgressRing>
         </div>
       </CardHeader>
       <CardContent>
