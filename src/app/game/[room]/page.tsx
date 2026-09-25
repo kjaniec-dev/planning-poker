@@ -1,6 +1,6 @@
 "use client";
 
-import { ErrorState, Skeleton } from "@kjaniec-dev/ui";
+import { EmptyState, ErrorState, Separator, Skeleton } from "@kjaniec-dev/ui";
 import {
   Ban,
   CheckCircle,
@@ -298,7 +298,10 @@ export default function GameRoomPage() {
                       onStart={startTimer}
                       onStop={stopTimer}
                     />
-                    <div className="h-6 w-px bg-border mx-1 hidden sm:block" />
+                    <Separator
+                      orientation="vertical"
+                      className="mx-1 hidden h-6 sm:block"
+                    />
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -309,7 +312,7 @@ export default function GameRoomPage() {
                         >
                           {linkCopied ? (
                             <>
-                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <CheckCircle className="h-4 w-4 text-success" />
                               <span>Copied!</span>
                             </>
                           ) : (
@@ -368,32 +371,31 @@ export default function GameRoomPage() {
 
                 <TabsContent value="voting" className="mt-0 outline-none">
                   {isSpectator ? (
-                    <div className="flex h-40 flex-col items-center justify-center gap-4 text-center">
-                      <Ban className="size-12" />
-                      <div className="space-y-1">
-                        <p className="font-semibold">You are a spectator</p>
-                        <p className="text-sm text-muted-foreground">
-                          Enter your name to start voting.
-                        </p>
-                      </div>
-                      <form
-                        className="flex w-full max-w-sm items-center space-x-2"
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          handleBecomeParticipant();
-                        }}
-                      >
-                        <Input
-                          placeholder="Your Name"
-                          value={newName}
-                          autoFocus={true}
-                          onChange={(e) => setNewName(e.target.value)}
-                        />
-                        <Button type="submit" disabled={!newName.trim()}>
-                          Join
-                        </Button>
-                      </form>
-                    </div>
+                    <EmptyState
+                      icon={<Ban />}
+                      title="You are a spectator"
+                      description="Enter your name to start voting."
+                      className="min-h-0 py-10"
+                      action={
+                        <form
+                          className="flex w-full max-w-sm items-center gap-2"
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleBecomeParticipant();
+                          }}
+                        >
+                          <Input
+                            placeholder="Your Name"
+                            value={newName}
+                            autoFocus={true}
+                            onChange={(e) => setNewName(e.target.value)}
+                          />
+                          <Button type="submit" disabled={!newName.trim()}>
+                            Join
+                          </Button>
+                        </form>
+                      }
+                    />
                   ) : (
                     <VotingCards
                       selection={selection}
@@ -456,7 +458,7 @@ export default function GameRoomPage() {
                         >
                           {linkCopied ? (
                             <>
-                              <CheckCircle className="h-4 w-4 text-green-600" />
+                              <CheckCircle className="h-4 w-4 text-success" />
                               <span>Copied!</span>
                             </>
                           ) : (
